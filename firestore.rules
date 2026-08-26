@@ -1,0 +1,12 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Punto de partida simple: cualquiera que tenga la URL de la app
+    // puede leer y escribir. Suficiente para uso interno del negocio.
+    // Ver README.md, sección "Seguridad", si más adelante quieres
+    // restringir esto con autenticación.
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
