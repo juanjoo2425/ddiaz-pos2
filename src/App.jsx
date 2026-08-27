@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   ShoppingCart, Plus, Minus, Trash2, Printer, Search, TrendingUp, Package,
   Receipt, BarChart3, X, Settings, AlertTriangle, RefreshCw, User, Check,
-  DollarSign, Store, Edit2, PlusCircle, Lock, LockOpen, WifiOff
+  DollarSign, Store, Edit2, PlusCircle, Lock, LockOpen, WifiOff,
+  Clock, Users, Calendar, Percent, Layers, Award, TrendingDown, ShoppingBasket, Repeat
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -83,6 +84,13 @@ const money = (n) => {
   return `S/ ${v.toFixed(2)}`;
 };
 
+// Redondea a 2 decimales para evitar arrastrar errores de coma
+// flotante (ej. 1.5 - 0.5 = 0.9999999998) al sumar/restar cantidades.
+const roundQty = (n) => Math.round(n * 100) / 100;
+
+// Solo la categoría "Panadería" admite cantidades fraccionadas (1.5, 2.5...).
+const isFractionable = (category) => category === 'Panadería';
+
 const fmtDate = (iso) => {
   const d = new Date(iso);
   return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -101,6 +109,21 @@ const daysAgo = (n) => {
   d.setHours(0, 0, 0, 0);
   return d;
 };
+
+// Utilidades para KPIs
+const pctChange = (current, previous) => {
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return ((current - previous) / previous) * 100;
+};
+
+const median = (arr) => {
+  if (arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+const DOW_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
 function computeCartTotals(cart) {
   const total = cart.reduce((s, it) => s + it.price * it.qty, 0);
@@ -134,7 +157,10 @@ function Toast({ toast }) {
 }
 
 // ============================================================
-// TICKET DE IMPRESIÓN (formato 80mm térmico)
+// TICKET DE IMPRESIÓN — versión "comanda de despacho": rápido de
+// leer para quien prepara el pedido. Todo el detalle fiscal (fecha,
+// IGV, pago, vuelto, etc.) se sigue guardando en el sistema — solo
+// no se imprime en este papel, para que salga corto y rápido.
 // ============================================================
 function Ticket({ sale, business }) {
   if (!sale) return null;
@@ -142,59 +168,42 @@ function Ticket({ sale, business }) {
     <div
       id="print-ticket"
       style={{
-        width: '72mm',
+        // Rollo térmico de 58mm: el área imprimible real ronda los 48-50mm
+        // (el rollo mide 58mm pero los mecanismos de casi todas las
+        // impresoras de este tipo, incluida la Xprinter de la foto, no
+        // imprimen hasta el borde físico).
+        width: '50mm',
         margin: '0 auto',
-        fontFamily: "'Courier New', monospace",
+        fontFamily: "Arial, Helvetica, sans-serif",
         color: '#000',
-        fontSize: '11px',
-        lineHeight: 1.45,
-        padding: '4mm 2mm',
+        padding: '2mm 1mm',
       }}
     >
-      <div style={{ textAlign: 'center', marginBottom: 6 }}>
-        <div style={{ fontWeight: 700, fontSize: '15px' }}>{business.name}</div>
-        <div>{business.slogan}</div>
-        <div>RUC: {business.ruc}</div>
-        <div>{business.address}</div>
-        <div>Tel: {business.phone}</div>
+      <div style={{ textAlign: 'center', fontWeight: 900, fontSize: '20px', letterSpacing: '0.3px' }}>
+        {business.name}
       </div>
-      <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-      <div style={{ textAlign: 'center', fontWeight: 700 }}>
-        {sale.docType === 'Boleta' && 'BOLETA DE VENTA ELECTRÓNICA'}
-        {sale.docType === 'Factura' && 'FACTURA ELECTRÓNICA'}
-        {sale.docType === 'Nota de venta' && 'NOTA DE VENTA'}
+      <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '11px', margin: '3px 0 6px' }}>
+        N.º {sale.docNumber}
       </div>
-      <div style={{ textAlign: 'center', fontWeight: 700, marginBottom: 4 }}>{sale.docNumber}</div>
-      <div>Fecha: {fmtDate(sale.date)} {fmtTime(sale.date)}</div>
-      <div>Atendido por: {sale.seller}</div>
-      {sale.customerName && <div>Cliente: {sale.customerName}</div>}
-      {sale.customerDoc && <div>Doc: {sale.customerDoc}</div>}
-      <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+      <div style={{ borderTop: '2px dashed #000', margin: '4px 0 6px' }} />
       {sale.items.map((it, i) => (
-        <div key={i} style={{ marginBottom: 3 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>{it.name}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>{it.qty} x {money(it.price)}</span>
-            <span>{money(it.price * it.qty)}</span>
-          </div>
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 6,
+            fontWeight: 800,
+            fontSize: '17px',
+            lineHeight: 1.25,
+            padding: '4px 0',
+            borderBottom: i < sale.items.length - 1 ? '1px dashed #999' : 'none',
+          }}
+        >
+          <span style={{ flexShrink: 0 }}>{it.qty}x</span>
+          <span style={{ textTransform: 'uppercase' }}>{it.name}</span>
         </div>
       ))}
-      <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Op. gravada</span><span>{money(sale.subtotalSinIgv)}</span></div>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>IGV (18%)</span><span>{money(sale.igv)}</span></div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '13px' }}><span>TOTAL</span><span>{money(sale.total)}</span></div>
-      <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-      <div>Pago: {sale.paymentMethod}</div>
-      {sale.paymentMethod === 'Efectivo' && (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Recibido</span><span>{money(sale.cashReceived)}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Vuelto</span><span>{money(sale.change)}</span></div>
-        </>
-      )}
-      <div style={{ textAlign: 'center', marginTop: 10 }}>¡Gracias por su compra!</div>
-      <div style={{ textAlign: 'center', fontSize: '9px', color: '#333' }}>www.ddiaz.pe</div>
     </div>
   );
 }
@@ -265,8 +274,8 @@ function PosTab({
   });
 
   const totals = computeCartTotals(cart);
-  const change = paymentMethod === 'Efectivo' ? Math.max(0, (parseFloat(cashReceived) || 0) - totals.total) : 0;
-  const cashInsufficient = paymentMethod === 'Efectivo' && (parseFloat(cashReceived) || 0) < totals.total && cart.length > 0;
+  const cashEntered = cashReceived.trim() !== '';
+  const change = paymentMethod === 'Efectivo' && cashEntered ? Math.max(0, (parseFloat(cashReceived) || 0) - totals.total) : null;
 
   const addToCart = (p) => {
     setCart((prev) => {
@@ -274,16 +283,27 @@ function PosTab({
       const currentQty = existing ? existing.qty : 0;
       if (currentQty + 1 > p.stock) return prev;
       if (existing) {
-        return prev.map((it) => it.productId === p.id ? { ...it, qty: it.qty + 1 } : it);
+        return prev.map((it) => it.productId === p.id ? { ...it, qty: roundQty(it.qty + 1) } : it);
       }
-      return [...prev, { productId: p.id, name: p.name, price: p.price, qty: 1, maxStock: p.stock }];
+      return [...prev, { productId: p.id, name: p.name, price: p.price, qty: 1, maxStock: p.stock, category: p.category }];
     });
   };
 
   const changeQty = (productId, delta) => {
     setCart((prev) => prev
-      .map((it) => it.productId === productId ? { ...it, qty: Math.min(it.maxStock, Math.max(0, it.qty + delta)) } : it)
+      .map((it) => it.productId === productId ? { ...it, qty: roundQty(Math.min(it.maxStock, Math.max(0, it.qty + delta))) } : it)
       .filter((it) => it.qty > 0));
+  };
+
+  // Solo para productos de Panadería: permite escribir directamente
+  // una cantidad fraccionada como 1.5 o 2.5.
+  const setExactQty = (productId, rawValue) => {
+    setCart((prev) => prev.map((it) => {
+      if (it.productId !== productId) return it;
+      const parsed = parseFloat(rawValue);
+      if (isNaN(parsed)) return { ...it, qty: rawValue === '' ? 0.5 : it.qty };
+      return { ...it, qty: roundQty(Math.min(it.maxStock, Math.max(0.5, parsed))) };
+    }));
   };
 
   const removeItem = (productId) => setCart((prev) => prev.filter((it) => it.productId !== productId));
@@ -338,7 +358,7 @@ function PosTab({
                   cursor: outOfStock ? 'not-allowed' : 'pointer',
                 }}
               >
-                <div className="text-sm font-semibold mb-1 leading-tight" style={{ color: C.text }}>{p.name}</div>
+                <div className="text-sm font-semibold mb-1 leading-tight" style={{ color: C.text, textTransform: 'uppercase' }}>{p.name}</div>
                 <div className="text-xs mb-2" style={{ color: C.textFaint }}>{p.category}</div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold" style={{ color: C.accent }}>{money(p.price)}</span>
@@ -372,24 +392,40 @@ function PosTab({
           {cart.length === 0 && (
             <div className="text-center py-8 text-sm" style={{ color: C.textFaint }}>Toca un producto para agregarlo</div>
           )}
-          {cart.map((it) => (
+          {cart.map((it) => {
+            const fractionable = isFractionable(it.category);
+            return (
             <div key={it.productId} className="flex items-center gap-2 py-2" style={{ borderBottom: `1px solid ${C.border}` }}>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium truncate" style={{ color: C.text }}>{it.name}</div>
+                <div className="text-xs font-medium truncate" style={{ color: C.text, textTransform: 'uppercase' }}>{it.name}</div>
                 <div className="text-xs" style={{ color: C.textFaint }}>{money(it.price)} c/u</div>
               </div>
-              <button onClick={() => changeQty(it.productId, -1)} className="w-6 h-6 flex items-center justify-center rounded-full" style={{ backgroundColor: C.surfaceAlt }}>
+              <button onClick={() => changeQty(it.productId, fractionable ? -0.5 : -1)} className="w-6 h-6 flex items-center justify-center rounded-full" style={{ backgroundColor: C.surfaceAlt }}>
                 <Minus size={12} style={{ color: C.text }} />
               </button>
-              <span className="text-xs font-bold w-4 text-center" style={{ color: C.text }}>{it.qty}</span>
-              <button onClick={() => changeQty(it.productId, 1)} className="w-6 h-6 flex items-center justify-center rounded-full" style={{ backgroundColor: C.surfaceAlt }}>
+              {fractionable ? (
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0.5"
+                  max={it.maxStock}
+                  value={it.qty}
+                  onChange={(e) => setExactQty(it.productId, e.target.value)}
+                  className="text-xs font-bold w-12 text-center rounded-md outline-none"
+                  style={{ color: C.text, border: `1px solid ${C.border}` }}
+                />
+              ) : (
+                <span className="text-xs font-bold w-4 text-center" style={{ color: C.text }}>{it.qty}</span>
+              )}
+              <button onClick={() => changeQty(it.productId, fractionable ? 0.5 : 1)} className="w-6 h-6 flex items-center justify-center rounded-full" style={{ backgroundColor: C.surfaceAlt }}>
                 <Plus size={12} style={{ color: C.text }} />
               </button>
               <button onClick={() => removeItem(it.productId)} className="w-6 h-6 flex items-center justify-center">
                 <Trash2 size={13} style={{ color: C.red }} />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="px-4 py-3 space-y-2.5" style={{ borderTop: `1px solid ${C.border}`, backgroundColor: C.surfaceAlt }}>
@@ -454,13 +490,15 @@ function PosTab({
                 step="0.10"
                 value={cashReceived}
                 onChange={(e) => setCashReceived(e.target.value)}
-                placeholder="Monto recibido"
+                placeholder="Monto recibido (opcional)"
                 className="flex-1 px-2 py-1.5 rounded-md text-xs outline-none"
                 style={{ border: `1px solid ${C.border}`, backgroundColor: C.surface, color: C.text }}
               />
-              <div className="text-xs whitespace-nowrap" style={{ color: C.textSoft }}>
-                Vuelto: <span className="font-bold" style={{ color: C.green }}>{money(change)}</span>
-              </div>
+              {cashEntered && (
+                <div className="text-xs whitespace-nowrap" style={{ color: C.textSoft }}>
+                  Vuelto: <span className="font-bold" style={{ color: C.green }}>{money(change)}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -478,16 +516,13 @@ function PosTab({
 
           <button
             onClick={onCheckout}
-            disabled={cart.length === 0 || cashInsufficient || checkingOut}
+            disabled={cart.length === 0 || checkingOut}
             className="w-full py-2.5 rounded-lg text-sm font-bold text-white flex items-center justify-center gap-2 disabled:opacity-40"
             style={{ backgroundColor: C.accent }}
           >
             {checkingOut ? <RefreshCw size={15} className="animate-spin" /> : <Receipt size={15} />}
             {checkingOut ? 'Procesando...' : 'Cobrar y emitir ticket'}
           </button>
-          {cashInsufficient && (
-            <div className="text-xs text-center" style={{ color: C.red }}>El monto recibido es menor al total.</div>
-          )}
         </div>
       </div>
     </div>
@@ -547,7 +582,7 @@ function InventarioTab({ products, onAdd, onEdit, onDelete, search, setSearch })
                 return (
                   <tr key={p.id} style={{ borderTop: `1px solid ${C.border}`, backgroundColor: C.surface }}>
                     <td className="px-3 py-2.5">
-                      <div className="font-medium" style={{ color: C.text }}>{p.name}</div>
+                      <div className="font-medium" style={{ color: C.text, textTransform: 'uppercase' }}>{p.name}</div>
                       <div className="text-xs" style={{ color: C.textFaint }}>{p.sku}</div>
                     </td>
                     <td className="px-3 py-2.5" style={{ color: C.textSoft }}>{p.category}</td>
@@ -590,17 +625,21 @@ function ProductModal({ product, onSave, onClose }) {
     name: '', category: CATEGORIAS[0], price: '', cost: '', stock: '', unit: 'unidad', sku: '', active: true,
   });
   const [error, setError] = useState('');
+  const fractionable = isFractionable(form.category);
 
   const submit = () => {
     if (!form.name.trim()) { setError('Ingresa un nombre.'); return; }
     if (form.price === '' || isNaN(parseFloat(form.price)) || parseFloat(form.price) < 0) { setError('Ingresa un precio válido.'); return; }
-    if (form.stock === '' || isNaN(parseInt(form.stock)) || parseInt(form.stock) < 0) { setError('Ingresa un stock válido.'); return; }
+    if (form.stock === '' || isNaN(parseFloat(form.stock)) || parseFloat(form.stock) < 0) { setError('Ingresa un stock válido.'); return; }
     onSave({
       ...form,
       id: form.id || genId(),
+      name: form.name.trim().toUpperCase(),
       price: parseFloat(form.price),
       cost: parseFloat(form.cost) || 0,
-      stock: parseInt(form.stock),
+      // Solo Panadería admite stock fraccionado (1.5, 2.5...); el resto
+      // de categorías se redondea a un número entero de unidades.
+      stock: fractionable ? roundQty(parseFloat(form.stock)) : Math.round(parseFloat(form.stock)),
       active: true,
     });
   };
@@ -616,7 +655,9 @@ function ProductModal({ product, onSave, onClose }) {
           <div>
             <label className="text-xs font-medium" style={{ color: C.textSoft }}>Nombre</label>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}` }} />
+              style={{ border: `1px solid ${C.border}`, textTransform: 'uppercase' }}
+              className="w-full mt-1 px-3 py-2 rounded-lg text-sm outline-none" />
+            <div className="text-xs mt-1" style={{ color: C.textFaint }}>Se guarda en MAYÚSCULAS automáticamente.</div>
           </div>
           <div>
             <label className="text-xs font-medium" style={{ color: C.textSoft }}>Categoría</label>
@@ -637,8 +678,8 @@ function ProductModal({ product, onSave, onClose }) {
                 className="w-full mt-1 px-2 py-2 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}` }} />
             </div>
             <div>
-              <label className="text-xs font-medium" style={{ color: C.textSoft }}>Stock</label>
-              <input type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })}
+              <label className="text-xs font-medium" style={{ color: C.textSoft }}>Stock {fractionable && <span style={{ color: C.honey }}>(admite .5)</span>}</label>
+              <input type="number" step={fractionable ? '0.5' : '1'} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })}
                 className="w-full mt-1 px-2 py-2 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}` }} />
             </div>
           </div>
@@ -704,23 +745,115 @@ function MetricsLock({ onUnlock }) {
   );
 }
 
+// ============================================================
+// Encabezado de sección reutilizable dentro de Métricas
+// ============================================================
+function SectionHeader({ icon: Icon, title, subtitle }) {
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <Icon size={16} style={{ color: C.accent }} />
+      <span className="text-sm font-bold uppercase tracking-wide" style={{ color: C.text }}>{title}</span>
+      {subtitle && <span className="text-xs" style={{ color: C.textFaint }}>· {subtitle}</span>}
+    </div>
+  );
+}
+
+// Insignia de crecimiento (▲/▼ X%) comparado con el período anterior
+function GrowthBadge({ pct }) {
+  if (!Number.isFinite(pct)) return null;
+  const positive = pct >= 0;
+  return (
+    <span className="inline-flex items-center gap-0.5" style={{ color: positive ? C.green : C.red, fontSize: 11, fontWeight: 700 }}>
+      {positive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+      {Math.abs(pct).toFixed(0)}%
+    </span>
+  );
+}
+
+// Insignia de clase ABC (análisis de Pareto)
+function ClassBadge({ clase }) {
+  const cfg = {
+    A: { bg: C.greenSoft, color: C.green },
+    B: { bg: C.honeySoft, color: C.honey },
+    C: { bg: C.surfaceAlt, color: C.textSoft },
+  }[clase];
+  return (
+    <span className="px-1.5 py-0.5 rounded text-xs font-bold" style={{ backgroundColor: cfg.bg, color: cfg.color }}>{clase}</span>
+  );
+}
+
 function MetricasTab({ sales, products }) {
   const today = new Date();
+  const productById = Object.fromEntries(products.map((p) => [p.id, p]));
 
+  // ---------- Ventas hoy / semana / mes + comparación con período anterior ----------
   const salesToday = sales.filter((s) => isSameDay(s.date, today));
   const totalToday = salesToday.reduce((s, x) => s + x.total, 0);
+  const salesYesterday = sales.filter((s) => isSameDay(s.date, daysAgo(1)));
+  const totalYesterday = salesYesterday.reduce((s, x) => s + x.total, 0);
+  const growthDay = pctChange(totalToday, totalYesterday);
 
   const last7Start = daysAgo(6);
+  const prev7Start = daysAgo(13);
   const salesWeek = sales.filter((s) => new Date(s.date) >= last7Start);
   const totalWeek = salesWeek.reduce((s, x) => s + x.total, 0);
+  const salesPrevWeek = sales.filter((s) => { const d = new Date(s.date); return d >= prev7Start && d < last7Start; });
+  const totalPrevWeek = salesPrevWeek.reduce((s, x) => s + x.total, 0);
+  const growthWeek = pctChange(totalWeek, totalPrevWeek);
 
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const salesMonth = sales.filter((s) => new Date(s.date) >= monthStart);
   const totalMonth = salesMonth.reduce((s, x) => s + x.total, 0);
+  const salesPrevMonth = sales.filter((s) => { const d = new Date(s.date); return d >= prevMonthStart && d < monthStart; });
+  const totalPrevMonth = salesPrevMonth.reduce((s, x) => s + x.total, 0);
+  const growthMonth = pctChange(totalMonth, totalPrevMonth);
 
   const avgTicket = sales.length > 0 ? sales.reduce((s, x) => s + x.total, 0) / sales.length : 0;
+  const medianTicket = median(sales.map((s) => s.total));
 
-  // Ventas por día (últimos 7 días)
+  // ---------- Canasta promedio (ítems por venta) ----------
+  const totalItemsSold = sales.reduce((s, x) => s + x.items.reduce((a, it) => a + it.qty, 0), 0);
+  const avgBasketSize = sales.length > 0 ? totalItemsSold / sales.length : 0;
+
+  // ---------- Margen bruto (últimos 30 días, con el costo actual de cada producto) ----------
+  const last30Start = daysAgo(29);
+  const sales30 = sales.filter((s) => new Date(s.date) >= last30Start);
+  let revenue30 = 0, cost30 = 0;
+  sales30.forEach((s) => s.items.forEach((it) => {
+    revenue30 += it.qty * it.price;
+    const prod = productById[it.productId];
+    cost30 += it.qty * (prod ? prod.cost : 0);
+  }));
+  const grossProfit30 = revenue30 - cost30;
+  const grossMarginPct30 = revenue30 > 0 ? (grossProfit30 / revenue30) * 100 : 0;
+
+  // ---------- Rotación de inventario (30 días) ----------
+  const avgInventoryValue = products.filter((p) => p.active).reduce((s, p) => s + p.stock * p.cost, 0);
+  const turnover30 = avgInventoryValue > 0 ? cost30 / avgInventoryValue : 0;
+  const turnoverAnnualized = turnover30 * (365 / 30);
+
+  // ---------- Ventas por hora del día (horas pico) ----------
+  const hourBuckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, label: `${h}h`, ventas: 0, transacciones: 0 }));
+  sales.forEach((s) => {
+    const h = new Date(s.date).getHours();
+    hourBuckets[h].ventas += s.total;
+    hourBuckets[h].transacciones += 1;
+  });
+  const peakHour = hourBuckets.reduce((max, b) => (b.ventas > max.ventas ? b : max), hourBuckets[0]);
+  const hourChartData = hourBuckets.map((b) => ({ ...b, ventas: Number(b.ventas.toFixed(2)) }));
+
+  // ---------- Ventas por día de la semana ----------
+  const dowBuckets = DOW_LABELS.map((label, i) => ({ dow: i, label: label.slice(0, 3), ventas: 0, transacciones: 0 }));
+  sales.forEach((s) => {
+    const d = new Date(s.date).getDay();
+    dowBuckets[d].ventas += s.total;
+    dowBuckets[d].transacciones += 1;
+  });
+  const dowOrdered = [1, 2, 3, 4, 5, 6, 0].map((i) => ({ ...dowBuckets[i], ventas: Number(dowBuckets[i].ventas.toFixed(2)) }));
+  const peakDow = dowBuckets.reduce((max, b) => (b.ventas > max.ventas ? b : max), dowBuckets[0]);
+
+  // ---------- Ventas de los últimos 7 días (tendencia) ----------
   const chartDays = Array.from({ length: 7 }, (_, i) => {
     const d = daysAgo(6 - i);
     const dayLabel = d.toLocaleDateString('es-PE', { weekday: 'short' });
@@ -728,61 +861,135 @@ function MetricasTab({ sales, products }) {
     return { day: dayLabel, ventas: Number(total.toFixed(2)) };
   });
 
-  // Top productos
+  // ---------- Productos: por cantidad, por ingresos, ABC/Pareto, sin movimiento ----------
   const productTotals = {};
   sales.forEach((s) => s.items.forEach((it) => {
-    if (!productTotals[it.name]) productTotals[it.name] = { name: it.name, cantidad: 0, ingresos: 0 };
-    productTotals[it.name].cantidad += it.qty;
-    productTotals[it.name].ingresos += it.qty * it.price;
+    if (!productTotals[it.productId]) productTotals[it.productId] = { productId: it.productId, name: it.name, cantidad: 0, ingresos: 0 };
+    productTotals[it.productId].cantidad += it.qty;
+    productTotals[it.productId].ingresos += it.qty * it.price;
   }));
-  const topProducts = Object.values(productTotals).sort((a, b) => b.cantidad - a.cantidad).slice(0, 6);
+  const topByQty = Object.values(productTotals).sort((a, b) => b.cantidad - a.cantidad).slice(0, 6);
+  const topByRevenue = [...Object.values(productTotals)].sort((a, b) => b.ingresos - a.ingresos).slice(0, 6);
 
-  // Por método de pago
+  const productsByRevenue = Object.values(productTotals).sort((a, b) => b.ingresos - a.ingresos);
+  const totalRevenueAll = productsByRevenue.reduce((s, p) => s + p.ingresos, 0);
+  let cumulative = 0;
+  const abcRows = productsByRevenue.map((p) => {
+    cumulative += p.ingresos;
+    const cumPct = totalRevenueAll > 0 ? (cumulative / totalRevenueAll) * 100 : 0;
+    const clase = cumPct <= 80 ? 'A' : cumPct <= 95 ? 'B' : 'C';
+    return { ...p, pct: totalRevenueAll > 0 ? (p.ingresos / totalRevenueAll) * 100 : 0, cumPct, clase };
+  });
+  const countA = abcRows.filter((r) => r.clase === 'A').length;
+
+  const soldProductIds30 = new Set();
+  sales30.forEach((s) => s.items.forEach((it) => soldProductIds30.add(it.productId)));
+  const deadStock = products.filter((p) => p.active && p.stock > 0 && !soldProductIds30.has(p.id));
+
+  // ---------- Cobertura de stock (días hasta quedarse sin stock, al ritmo actual) ----------
+  const dailyQtyByProduct = {};
+  sales30.forEach((s) => s.items.forEach((it) => {
+    dailyQtyByProduct[it.productId] = (dailyQtyByProduct[it.productId] || 0) + it.qty;
+  }));
+  Object.keys(dailyQtyByProduct).forEach((pid) => { dailyQtyByProduct[pid] = dailyQtyByProduct[pid] / 30; });
+  const coverage = products
+    .filter((p) => p.active && (dailyQtyByProduct[p.id] || 0) > 0)
+    .map((p) => {
+      const dailyRate = dailyQtyByProduct[p.id];
+      return { id: p.id, name: p.name, stock: p.stock, dailyRate, days: p.stock / dailyRate };
+    })
+    .sort((a, b) => a.days - b.days)
+    .slice(0, 8);
+
+  // ---------- Stock bajo ----------
+  const lowStock = products.filter((p) => p.active && p.stock <= LOW_STOCK_THRESHOLD);
+
+  // ---------- Ranking de vendedores ----------
+  const bySeller = {};
+  sales.forEach((s) => {
+    if (!bySeller[s.seller]) bySeller[s.seller] = { seller: s.seller, ventas: 0, transacciones: 0 };
+    bySeller[s.seller].ventas += s.total;
+    bySeller[s.seller].transacciones += 1;
+  });
+  const sellerRanking = Object.values(bySeller)
+    .map((x) => ({ ...x, ticketProm: x.transacciones > 0 ? x.ventas / x.transacciones : 0 }))
+    .sort((a, b) => b.ventas - a.ventas);
+
+  // ---------- Por método de pago y por tipo de documento ----------
   const byPayment = {};
   sales.forEach((s) => { byPayment[s.paymentMethod] = (byPayment[s.paymentMethod] || 0) + s.total; });
   const paymentData = Object.entries(byPayment).map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
 
-  // Stock bajo
-  const lowStock = products.filter((p) => p.active && p.stock <= LOW_STOCK_THRESHOLD);
+  const byDocType = {};
+  sales.forEach((s) => { byDocType[s.docType] = (byDocType[s.docType] || 0) + s.total; });
+  const docTypeData = Object.entries(byDocType).map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
+
+  const emptyState = (
+    <div className="h-full flex items-center justify-center text-xs" style={{ color: C.textFaint }}>Aún no hay suficientes ventas.</div>
+  );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
+      {/* ============ RESUMEN GENERAL ============ */}
+      <SectionHeader icon={BarChart3} title="Resumen general" />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard label="Ventas de hoy" value={money(totalToday)} sub={`${salesToday.length} tickets`} icon={DollarSign} color={C.accent} />
-        <MetricCard label="Últimos 7 días" value={money(totalWeek)} sub={`${salesWeek.length} tickets`} icon={TrendingUp} color={C.honey} />
-        <MetricCard label="Este mes" value={money(totalMonth)} sub={`${salesMonth.length} tickets`} icon={BarChart3} color={C.green} />
-        <MetricCard label="Ticket promedio" value={money(avgTicket)} sub={`${sales.length} ventas en total`} icon={Receipt} color={C.accentDark} />
+        <MetricCard label="Ventas de hoy" value={money(totalToday)} icon={DollarSign} color={C.accent}
+          sub={<span className="flex items-center gap-1.5">{salesToday.length} tickets <GrowthBadge pct={growthDay} /></span>} />
+        <MetricCard label="Últimos 7 días" value={money(totalWeek)} icon={TrendingUp} color={C.honey}
+          sub={<span className="flex items-center gap-1.5">{salesWeek.length} tickets <GrowthBadge pct={growthWeek} /></span>} />
+        <MetricCard label="Este mes" value={money(totalMonth)} icon={BarChart3} color={C.green}
+          sub={<span className="flex items-center gap-1.5">{salesMonth.length} tickets <GrowthBadge pct={growthMonth} /></span>} />
+        <MetricCard label="Ticket promedio" value={money(avgTicket)} icon={Receipt} color={C.accentDark}
+          sub={`Mediana: ${money(medianTicket)}`} />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MetricCard label="Margen bruto (30 días)" value={`${grossMarginPct30.toFixed(0)}%`} icon={Percent} color={C.green}
+          sub={`${money(grossProfit30)} de utilidad`} />
+        <MetricCard label="Canasta promedio" value={avgBasketSize.toFixed(1)} icon={ShoppingBasket} color={C.honey}
+          sub="ítems por venta" />
+        <MetricCard label="Rotación de inventario" value={`${turnover30.toFixed(2)}x`} icon={Repeat} color={C.accent}
+          sub={`≈ ${turnoverAnnualized.toFixed(1)}x al año`} />
+        <MetricCard label="Ventas totales" value={sales.length} icon={Receipt} color={C.accentDark}
+          sub="tickets registrados" />
       </div>
 
+      {/* ============ PATRONES DE VENTA ============ */}
+      <SectionHeader icon={Clock} title="Patrones de venta" subtitle="para planificar turnos y personal" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-          <div className="text-sm font-semibold mb-3" style={{ color: C.text }}>Ventas de los últimos 7 días</div>
-          <div style={{ height: 220 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartDays}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
-                <XAxis dataKey="day" tick={{ fontSize: 11, fill: C.textSoft }} axisLine={{ stroke: C.border }} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: C.textSoft }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v) => money(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
-                <Bar dataKey="ventas" fill={C.accent} radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold" style={{ color: C.text }}>Ventas por hora del día</div>
+            {sales.length > 0 && <div className="text-xs font-bold" style={{ color: C.accent }}>Hora pico: {peakHour.label}</div>}
+          </div>
+          <div style={{ height: 200 }}>
+            {sales.length === 0 ? emptyState : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hourChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: C.textSoft }} axisLine={{ stroke: C.border }} tickLine={false} interval={2} />
+                  <YAxis tick={{ fontSize: 10, fill: C.textSoft }} axisLine={false} tickLine={false} />
+                  <Tooltip formatter={(v) => money(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
+                  <Bar dataKey="ventas" fill={C.accent} radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
         <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-          <div className="text-sm font-semibold mb-3" style={{ color: C.text }}>Productos más vendidos</div>
-          <div style={{ height: 220 }}>
-            {topProducts.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-xs" style={{ color: C.textFaint }}>Aún no hay ventas.</div>
-            ) : (
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm font-semibold" style={{ color: C.text }}>Ventas por día de la semana</div>
+            {sales.length > 0 && <div className="text-xs font-bold" style={{ color: C.accent }}>Mejor día: {DOW_LABELS[peakDow.dow]}</div>}
+          </div>
+          <div style={{ height: 200 }}>
+            {sales.length === 0 ? emptyState : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topProducts} layout="vertical" margin={{ left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: C.textSoft }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10, fill: C.textSoft }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
-                  <Bar dataKey="cantidad" fill={C.honey} radius={[0, 4, 4, 0]} />
+                <BarChart data={dowOrdered}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: C.textSoft }} axisLine={{ stroke: C.border }} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: C.textSoft }} axisLine={false} tickLine={false} />
+                  <Tooltip formatter={(v) => money(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
+                  <Bar dataKey="ventas" fill={C.honey} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -790,25 +997,113 @@ function MetricasTab({ sales, products }) {
         </div>
       </div>
 
+      <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+        <div className="text-sm font-semibold mb-3" style={{ color: C.text }}>Tendencia — últimos 7 días</div>
+        <div style={{ height: 200 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartDays}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.border} vertical={false} />
+              <XAxis dataKey="day" tick={{ fontSize: 11, fill: C.textSoft }} axisLine={{ stroke: C.border }} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: C.textSoft }} axisLine={false} tickLine={false} />
+              <Tooltip formatter={(v) => money(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
+              <Line type="monotone" dataKey="ventas" stroke={C.accent} strokeWidth={2.5} dot={{ r: 3, fill: C.accent }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ============ PRODUCTOS ============ */}
+      <SectionHeader icon={Package} title="Productos" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-          <div className="text-sm font-semibold mb-3" style={{ color: C.text }}>Ventas por método de pago</div>
+          <div className="text-sm font-semibold mb-3" style={{ color: C.text }}>Más vendidos (por cantidad)</div>
           <div style={{ height: 200 }}>
-            {paymentData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-xs" style={{ color: C.textFaint }}>Aún no hay ventas.</div>
-            ) : (
+            {topByQty.length === 0 ? emptyState : (
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={paymentData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={(e) => e.name}>
-                    {paymentData.map((_, i) => <Cell key={i} fill={C.chart[i % C.chart.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v) => money(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
-                </PieChart>
+                <BarChart data={topByQty} layout="vertical" margin={{ left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: C.textSoft }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10, fill: C.textSoft }} axisLine={false} tickLine={false} tickFormatter={(n) => n.toUpperCase()} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
+                  <Bar dataKey="cantidad" fill={C.honey} radius={[0, 4, 4, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             )}
           </div>
         </div>
 
+        <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+          <div className="text-sm font-semibold mb-3" style={{ color: C.text }}>Más rentables (por ingresos)</div>
+          <div style={{ height: 200 }}>
+            {topByRevenue.length === 0 ? emptyState : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topByRevenue} layout="vertical" margin={{ left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: C.textSoft }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10, fill: C.textSoft }} axisLine={false} tickLine={false} tickFormatter={(n) => n.toUpperCase()} />
+                  <Tooltip formatter={(v) => money(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
+                  <Bar dataKey="ingresos" fill={C.green} radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+        <div className="flex items-center gap-1.5 text-sm font-semibold mb-1" style={{ color: C.text }}>
+          <Layers size={15} style={{ color: C.accent }} /> Análisis ABC (Pareto)
+        </div>
+        {abcRows.length === 0 ? (
+          <div className="text-xs py-3" style={{ color: C.textFaint }}>Aún no hay suficientes ventas para este análisis.</div>
+        ) : (
+          <>
+            <div className="text-xs mb-3" style={{ color: C.textSoft }}>
+              <span className="font-bold" style={{ color: C.green }}>{countA}</span> de {abcRows.length} productos (clase A) generan el 80% de tus ingresos. Prioriza su stock y calidad.
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs" style={{ minWidth: 480 }}>
+                <thead>
+                  <tr style={{ backgroundColor: C.surfaceAlt }}>
+                    {['Clase', 'Producto', 'Ingresos', '% del total', '% acumulado'].map((h) => (
+                      <th key={h} className="text-left px-2 py-1.5 font-semibold uppercase tracking-wide" style={{ color: C.textSoft }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {abcRows.slice(0, 10).map((r) => (
+                    <tr key={r.productId} style={{ borderTop: `1px solid ${C.border}` }}>
+                      <td className="px-2 py-1.5"><ClassBadge clase={r.clase} /></td>
+                      <td className="px-2 py-1.5" style={{ color: C.text, textTransform: 'uppercase' }}>{r.name}</td>
+                      <td className="px-2 py-1.5" style={{ color: C.text }}>{money(r.ingresos)}</td>
+                      <td className="px-2 py-1.5" style={{ color: C.textSoft }}>{r.pct.toFixed(1)}%</td>
+                      <td className="px-2 py-1.5" style={{ color: C.textSoft }}>{r.cumPct.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+
+      {deadStock.length > 0 && (
+        <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+          <div className="flex items-center gap-1.5 text-sm font-semibold mb-2" style={{ color: C.text }}>
+            <AlertTriangle size={15} style={{ color: C.red }} /> Productos sin movimiento (últimos 30 días)
+          </div>
+          <div className="text-xs mb-2" style={{ color: C.textSoft }}>Tienen stock pero no se han vendido en un mes — revisa si conviene bajar su precio, promocionarlos o dejar de reponerlos.</div>
+          <div className="flex flex-wrap gap-1.5">
+            {deadStock.map((p) => (
+              <span key={p.id} className="px-2 py-1 rounded-lg text-xs" style={{ backgroundColor: C.redSoft, color: C.red, textTransform: 'uppercase' }}>{p.name}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ============ INVENTARIO ============ */}
+      <SectionHeader icon={AlertTriangle} title="Inventario" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
           <div className="flex items-center gap-1.5 text-sm font-semibold mb-3" style={{ color: C.text }}>
             <AlertTriangle size={15} style={{ color: C.honey }} /> Stock bajo (≤ {LOW_STOCK_THRESHOLD} unidades)
@@ -817,11 +1112,93 @@ function MetricasTab({ sales, products }) {
             {lowStock.length === 0 && <div className="text-xs" style={{ color: C.textFaint }}>Todo el inventario está en buen nivel.</div>}
             {lowStock.map((p) => (
               <div key={p.id} className="flex items-center justify-between text-sm">
-                <span style={{ color: C.text }}>{p.name}</span>
+                <span style={{ color: C.text, textTransform: 'uppercase' }}>{p.name}</span>
                 <span className="font-bold px-2 py-0.5 rounded-full text-xs" style={{ backgroundColor: C.redSoft, color: C.red }}>{p.stock} und.</span>
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+          <div className="flex items-center gap-1.5 text-sm font-semibold mb-1" style={{ color: C.text }}>
+            <Calendar size={15} style={{ color: C.accent }} /> Cobertura de stock
+          </div>
+          <div className="text-xs mb-2" style={{ color: C.textSoft }}>Días hasta agotarse, al ritmo de venta de los últimos 30 días.</div>
+          <div className="space-y-1.5 max-h-44 overflow-y-auto">
+            {coverage.length === 0 && <div className="text-xs" style={{ color: C.textFaint }}>Sin datos suficientes todavía.</div>}
+            {coverage.map((c) => {
+              const urgent = c.days < 7;
+              const warn = c.days >= 7 && c.days < 15;
+              return (
+                <div key={c.id} className="flex items-center justify-between text-sm">
+                  <span style={{ color: C.text, textTransform: 'uppercase' }}>{c.name}</span>
+                  <span className="font-bold px-2 py-0.5 rounded-full text-xs" style={{
+                    backgroundColor: urgent ? C.redSoft : warn ? C.honeySoft : C.greenSoft,
+                    color: urgent ? C.red : warn ? C.honey : C.green,
+                  }}>
+                    {c.days < 100 ? `${c.days.toFixed(0)} días` : '90+ días'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ============ EQUIPO Y PAGOS ============ */}
+      <SectionHeader icon={Users} title="Equipo y pagos" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+          <div className="flex items-center gap-1.5 text-sm font-semibold mb-3" style={{ color: C.text }}>
+            <Award size={15} style={{ color: C.honey }} /> Ranking de vendedores
+          </div>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {sellerRanking.length === 0 && <div className="text-xs" style={{ color: C.textFaint }}>Aún no hay ventas.</div>}
+            {sellerRanking.map((s, i) => (
+              <div key={s.seller} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-1.5" style={{ color: C.text }}>
+                  <span className="text-xs font-bold w-4" style={{ color: C.textFaint }}>#{i + 1}</span> {s.seller}
+                </span>
+                <span className="text-right">
+                  <span className="font-bold" style={{ color: C.text }}>{money(s.ventas)}</span>
+                  <span className="text-xs ml-1.5" style={{ color: C.textFaint }}>({s.transacciones} · {money(s.ticketProm)} prom.)</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+          <div className="text-sm font-semibold mb-3" style={{ color: C.text }}>Ventas por método de pago</div>
+          <div style={{ height: 190 }}>
+            {paymentData.length === 0 ? emptyState : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={paymentData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={65} label={(e) => e.name}>
+                    {paymentData.map((_, i) => <Cell key={i} fill={C.chart[i % C.chart.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => money(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+        <div className="text-sm font-semibold mb-3" style={{ color: C.text }}>Ventas por tipo de documento</div>
+        <div style={{ height: 180 }}>
+          {docTypeData.length === 0 ? emptyState : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={docTypeData} layout="vertical" margin={{ left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: C.textSoft }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11, fill: C.textSoft }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={(v) => money(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}` }} />
+                <Bar dataKey="value" fill={C.accent} radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
     </div>
@@ -995,6 +1372,23 @@ function TicketModal({ sale, business, onClose }) {
           <span className="font-bold text-sm" style={{ color: C.text }}>Venta registrada</span>
           <button onClick={onClose}><X size={18} style={{ color: C.textSoft }} /></button>
         </div>
+
+        {/* Resumen para el vendedor (queda en el sistema, no se imprime) */}
+        <div className="px-4 py-3 space-y-1" style={{ backgroundColor: C.surfaceAlt, borderBottom: `1px solid ${C.border}` }}>
+          <div className="flex justify-between text-sm font-bold" style={{ color: C.text }}>
+            <span>Total cobrado</span><span>{money(sale.total)}</span>
+          </div>
+          <div className="flex justify-between text-xs" style={{ color: C.textSoft }}>
+            <span>{sale.docType} · {sale.docNumber}</span><span>{sale.paymentMethod}</span>
+          </div>
+          {sale.paymentMethod === 'Efectivo' && sale.cashReceived != null && (
+            <div className="flex justify-between text-xs" style={{ color: C.textSoft }}>
+              <span>Recibido {money(sale.cashReceived)}</span><span>Vuelto {money(sale.change)}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="text-center text-xs pt-2" style={{ color: C.textFaint }}>Esto es lo que se va a imprimir ↓</div>
         <div className="overflow-y-auto p-3" style={{ backgroundColor: '#fff' }}>
           <Ticket sale={sale} business={business} />
         </div>
@@ -1026,7 +1420,7 @@ export default function App() {
   const [currentSeller, setCurrentSeller] = useState(null);
 
   const [activeTab, setActiveTab] = useState('pos');
-  const [metricsUnlocked, setMetricsUnlocked] = useState(false);
+  const [privateUnlocked, setPrivateUnlocked] = useState(false);
   const [cart, setCart] = useState([]);
   const [search, setSearch] = useState('');
   const [invSearch, setInvSearch] = useState('');
@@ -1125,7 +1519,7 @@ export default function App() {
     setCheckingOut(true);
     try {
       const totals = computeCartTotals(cart);
-      const cashNum = parseFloat(cashReceived) || 0;
+      const cashNum = cashReceived.trim() !== '' ? (parseFloat(cashReceived) || 0) : null;
 
       const sale = await checkoutSale({
         cart,
@@ -1197,9 +1591,27 @@ export default function App() {
     <div style={{ backgroundColor: C.bg, minHeight: '100vh' }} className="p-4">
       <style>{`
         @media print {
+          /* Le decimos al navegador el tamaño REAL del rollo térmico
+             (58mm de ancho) y que el alto sea automático según el
+             contenido — así no imprime una hoja tipo carta con la
+             comanda perdida en una esquina y todo lo demás en blanco. */
+          @page {
+            size: 58mm auto;
+            margin: 0;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
           body * { visibility: hidden; }
           #print-ticket, #print-ticket * { visibility: visible; }
-          #print-ticket { position: absolute; left: 0; top: 0; }
+          #print-ticket {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 50mm;
+            margin: 0;
+          }
         }
       `}</style>
 
@@ -1250,12 +1662,12 @@ export default function App() {
             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: offline ? C.red : C.green }} />
             {offline ? 'Sin conexión' : 'En vivo'}
           </div>
-          {activeTab === 'metricas' && metricsUnlocked && (
+          {(activeTab === 'metricas' || activeTab === 'historial') && privateUnlocked && (
             <button
-              onClick={() => setMetricsUnlocked(false)}
+              onClick={() => setPrivateUnlocked(false)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium"
               style={{ border: `1px solid ${C.border}`, color: C.textSoft }}
-              title="Bloquear métricas de nuevo"
+              title="Bloquear de nuevo"
             >
               <LockOpen size={13} /> Bloquear
             </button>
@@ -1294,11 +1706,15 @@ export default function App() {
           />
         )}
         {activeTab === 'metricas' && (
-          metricsUnlocked
+          privateUnlocked
             ? <MetricasTab sales={sales} products={products} />
-            : <MetricsLock onUnlock={() => setMetricsUnlocked(true)} />
+            : <MetricsLock onUnlock={() => setPrivateUnlocked(true)} />
         )}
-        {activeTab === 'historial' && <HistorialTab sales={sales} onReprint={(s) => setTicketModal(s)} />}
+        {activeTab === 'historial' && (
+          privateUnlocked
+            ? <HistorialTab sales={sales} onReprint={(s) => setTicketModal(s)} />
+            : <MetricsLock onUnlock={() => setPrivateUnlocked(true)} />
+        )}
       </div>
     </div>
   );
