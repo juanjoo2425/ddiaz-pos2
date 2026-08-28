@@ -47,6 +47,48 @@ export function subscribeSellers(onChange) {
   }, (err) => console.error('subscribeSellers error', err));
 }
 
+// La contraseña que protege Métricas, Historial y Configuraciones vive en
+// Firestore (no en el código) para poder cambiarla desde la app sin
+// necesidad de volver a publicar el proyecto.
+export function subscribeSecurity(onChange, fallback) {
+  return onSnapshot(doc(db, 'config', 'security'), (snap) => {
+    onChange(snap.exists() ? snap.data() : fallback);
+  }, (err) => console.error('subscribeSecurity error', err));
+}
+
+export async function saveSecurity(data) {
+  await setDoc(doc(db, 'config', 'security'), data, { merge: true });
+}
+
+// Categorías de productos: también configurables en vivo desde la app
+// (Configuraciones), no hardcodeadas en el código.
+export function subscribeCategories(onChange) {
+  return onSnapshot(doc(db, 'config', 'categories'), (snap) => {
+    // null = el documento todavía no existe (primera vez, hay que sembrarlo)
+    onChange(snap.exists() ? (snap.data().names || []) : null);
+  }, (err) => console.error('subscribeCategories error', err));
+}
+
+export async function seedCategoriesIfEmpty(defaultNames) {
+  await setDoc(doc(db, 'config', 'categories'), { names: defaultNames });
+}
+
+export async function saveCategories(names) {
+  await setDoc(doc(db, 'config', 'categories'), { names });
+}
+
+// Ajustes generales del punto de venta (ej. si el monto recibido en
+// efectivo es obligatorio u opcional).
+export function subscribePosSettings(onChange, fallback) {
+  return onSnapshot(doc(db, 'config', 'pos-settings'), (snap) => {
+    onChange(snap.exists() ? snap.data() : fallback);
+  }, (err) => console.error('subscribePosSettings error', err));
+}
+
+export async function savePosSettings(data) {
+  await setDoc(doc(db, 'config', 'pos-settings'), data, { merge: true });
+}
+
 export async function saveProduct(product) {
   const id = product.id || crypto.randomUUID();
   await setDoc(doc(db, 'products', id), { ...product, id });
@@ -113,7 +155,9 @@ export async function checkoutSale({ cart, seller, docType, customerName, custom
     // 3. Descontar stock
     productSnaps.forEach((snap, i) => {
       const item = cart[i];
-      tx.update(productRefs[i], { stock: snap.data().stock - item.qty });
+      // Redondeamos a 2 decimales para no arrastrar errores de coma
+      // flotante cuando se venden cantidades fraccionadas (pan por 1.5, etc.)
+      tx.update(productRefs[i], { stock: Math.round((snap.data().stock - item.qty) * 100) / 100 });
     });
 
     // 4. Guardar venta y actualizar contador
@@ -130,8 +174,8 @@ export async function checkoutSale({ cart, seller, docType, customerName, custom
       igv: totals.igv,
       total: totals.total,
       paymentMethod,
-      cashReceived: paymentMethod === 'Efectivo' ? cashReceived : null,
-      change: paymentMethod === 'Efectivo' ? Math.max(0, cashReceived - totals.total) : null,
+      cashReceived: paymentMethod === 'Efectivo' && cashReceived != null ? cashReceived : null,
+      change: paymentMethod === 'Efectivo' && cashReceived != null ? Math.max(0, cashReceived - totals.total) : null,
     };
     tx.set(saleRef, sale);
     tx.set(counterRef, { count: nextCount }, { merge: true });
@@ -140,4 +184,28 @@ export async function checkoutSale({ cart, seller, docType, customerName, custom
   });
 
   return result;
+}
+
+/**
+ * Elimina una venta del historial (para corregir ventas de prueba/simuladas
+ * que no deben afectar tus métricas). De forma ATÓMICA, opcionalmente
+ * devuelve el stock vendido a cada producto involucrado.
+ */
+export async function deleteSale({ saleId, items, restoreStock }) {
+  await runTransaction(db, async (tx) => {
+    const saleRef = doc(db, 'sales', saleId);
+
+    if (restoreStock && items && items.length > 0) {
+      const productRefs = items.map((it) => doc(db, 'products', it.productId));
+      const productSnaps = await Promise.all(productRefs.map((ref) => tx.get(ref)));
+      productSnaps.forEach((snap, i) => {
+        if (snap.exists()) {
+          const restored = Math.round((snap.data().stock + items[i].qty) * 100) / 100;
+          tx.update(productRefs[i], { stock: restored });
+        }
+      });
+    }
+
+    tx.delete(saleRef);
+  });
 }
