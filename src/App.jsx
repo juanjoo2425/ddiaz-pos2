@@ -14,7 +14,7 @@ import {
   saveProduct as fbSaveProduct, deleteProductDoc, saveBusinessInfo as fbSaveBusiness,
   addSeller as fbAddSeller, seedProductsIfEmpty, checkoutSale,
   subscribeSecurity, saveSecurity, subscribeCategories, seedCategoriesIfEmpty, saveCategories,
-  deleteSale as fbDeleteSale, subscribePosSettings, savePosSettings,
+  deleteSale as fbDeleteSale, subscribePosSettings, savePosSettings, replaceCatalog,
 } from './lib/pos-data';
 
 
@@ -52,23 +52,65 @@ const LOW_STOCK_THRESHOLD = 5;
 // contraseña real vive en la base de datos y se cambia desde Configuraciones.
 const DEFAULT_PASSWORD = 'clea25';
 
-const DEFAULT_CATEGORIES = ['Panadería', 'Pastelería', 'Galletas y snacks', 'Bebidas', 'Otros'];
+const DEFAULT_CATEGORIES = ['Sándwiches', 'Bebidas', 'Bebidas calientes', 'Postres y pasteles'];
 const METODOS_PAGO = ['Efectivo', 'Yape / Plin', 'Tarjeta'];
 const TIPOS_DOC = ['Boleta', 'Factura', 'Nota de venta'];
 
+// Carta real de D'DIAZ. Se usa tanto para sembrar la base de datos la
+// primera vez, como para el botón "Reemplazar catálogo" en Configuraciones
+// (por si ya tenías productos de ejemplo cargados y quieres reemplazarlos
+// por tu carta real de una sola vez).
+// Nota sobre "cost": no tenía tus costos reales, así que puse un estimado
+// (~40% del precio) solo para que el margen/Pareto de Métricas no quede en
+// blanco. Ajusta cada costo real en Inventario cuando puedas.
+// Nota sobre "stock": los sándwiches y bebidas los dejé en 999 (se asumen
+// preparados al momento, no se acaban); los postres/pasteles en 15 porque
+// normalmente se hornean en tandas limitadas. Ajusta a lo que corresponda.
 const SEED_PRODUCTS = [
-  { id: 'p1', name: 'Pan francés (unidad)', category: 'Panadería', price: 0.40, cost: 0.18, stock: 200, unit: 'unidad', sku: 'PAN-001', active: true },
-  { id: 'p2', name: 'Pan de yema', category: 'Panadería', price: 1.00, cost: 0.45, stock: 80, unit: 'unidad', sku: 'PAN-002', active: true },
-  { id: 'p3', name: 'Baguette artesanal', category: 'Panadería', price: 6.50, cost: 2.80, stock: 25, unit: 'unidad', sku: 'PAN-003', active: true },
-  { id: 'p4', name: 'Torta de chocolate (porción)', category: 'Pastelería', price: 9.50, cost: 3.80, stock: 18, unit: 'unidad', sku: 'PAS-001', active: true },
-  { id: 'p5', name: 'Torta tres leches (porción)', category: 'Pastelería', price: 8.50, cost: 3.40, stock: 15, unit: 'unidad', sku: 'PAS-002', active: true },
-  { id: 'p6', name: 'Alfajor de maicena', category: 'Galletas y snacks', price: 2.50, cost: 1.00, stock: 60, unit: 'unidad', sku: 'GAL-001', active: true },
-  { id: 'p7', name: 'Galletas de avena (paquete x6)', category: 'Galletas y snacks', price: 5.00, cost: 2.10, stock: 30, unit: 'paquete', sku: 'GAL-002', active: true },
-  { id: 'p8', name: 'Empanada de pollo', category: 'Panadería', price: 3.50, cost: 1.60, stock: 40, unit: 'unidad', sku: 'PAN-004', active: true },
-  { id: 'p9', name: 'Café americano', category: 'Bebidas', price: 4.00, cost: 1.20, stock: 999, unit: 'unidad', sku: 'BEB-001', active: true },
-  { id: 'p10', name: 'Chicha morada (vaso)', category: 'Bebidas', price: 3.50, cost: 1.00, stock: 999, unit: 'unidad', sku: 'BEB-002', active: true },
-  { id: 'p11', name: 'Queque inglés (porción)', category: 'Pastelería', price: 4.50, cost: 1.80, stock: 22, unit: 'unidad', sku: 'PAS-003', active: true },
-  { id: 'p12', name: 'Croissant', category: 'Panadería', price: 3.00, cost: 1.30, stock: 4, unit: 'unidad', sku: 'PAN-005', active: true },
+  // ---- Sándwiches ----
+  { id: 'p1', name: 'Hamburguesa royal', category: 'Sándwiches', price: 6.00, cost: 2.70, stock: 999, unit: 'unidad', sku: 'SAN-001', active: true },
+  { id: 'p2', name: 'Croissant (jamón y queso)', category: 'Sándwiches', price: 6.00, cost: 2.70, stock: 999, unit: 'unidad', sku: 'SAN-002', active: true },
+  { id: 'p3', name: 'Hot dog', category: 'Sándwiches', price: 5.00, cost: 2.20, stock: 999, unit: 'unidad', sku: 'SAN-003', active: true },
+  { id: 'p4', name: 'Pan con pollo de la casa', category: 'Sándwiches', price: 2.50, cost: 1.10, stock: 999, unit: 'unidad', sku: 'SAN-004', active: true },
+  { id: 'p5', name: 'Pan con chorihuevo', category: 'Sándwiches', price: 2.50, cost: 1.10, stock: 999, unit: 'unidad', sku: 'SAN-005', active: true },
+  { id: 'p6', name: 'Pan con salchicha', category: 'Sándwiches', price: 2.50, cost: 1.10, stock: 999, unit: 'unidad', sku: 'SAN-006', active: true },
+  { id: 'p7', name: 'Pan con queso fresco', category: 'Sándwiches', price: 2.50, cost: 1.10, stock: 999, unit: 'unidad', sku: 'SAN-007', active: true },
+  { id: 'p8', name: 'Pan con huevo', category: 'Sándwiches', price: 2.50, cost: 1.00, stock: 999, unit: 'unidad', sku: 'SAN-008', active: true },
+  { id: 'p9', name: 'Pizza con jamón y queso', category: 'Sándwiches', price: 5.00, cost: 2.20, stock: 999, unit: 'unidad', sku: 'SAN-009', active: true },
+  { id: 'p10', name: 'Pan con nuggets', category: 'Sándwiches', price: 6.00, cost: 2.70, stock: 999, unit: 'unidad', sku: 'SAN-010', active: true },
+  { id: 'p11', name: 'Pan con lomo', category: 'Sándwiches', price: 7.00, cost: 3.20, stock: 999, unit: 'unidad', sku: 'SAN-011', active: true },
+  { id: 'p12', name: 'Empanada de pollo', category: 'Sándwiches', price: 5.00, cost: 2.20, stock: 999, unit: 'unidad', sku: 'SAN-012', active: true },
+  { id: 'p13', name: 'Empanada de carne', category: 'Sándwiches', price: 5.00, cost: 2.30, stock: 999, unit: 'unidad', sku: 'SAN-013', active: true },
+  // ---- Bebidas ----
+  { id: 'p14', name: 'Chicha Morada', category: 'Bebidas', price: 3.00, cost: 1.00, stock: 999, unit: 'unidad', sku: 'BEB-001', active: true },
+  { id: 'p15', name: 'Jugo surtido', category: 'Bebidas', price: 2.50, cost: 0.90, stock: 999, unit: 'unidad', sku: 'BEB-002', active: true },
+  { id: 'p16', name: 'Jugo de piña', category: 'Bebidas', price: 4.00, cost: 1.50, stock: 999, unit: 'unidad', sku: 'BEB-003', active: true },
+  { id: 'p17', name: 'Jugo de papaya', category: 'Bebidas', price: 4.00, cost: 1.50, stock: 999, unit: 'unidad', sku: 'BEB-004', active: true },
+  { id: 'p18', name: 'Fresa con Leche', category: 'Bebidas', price: 4.00, cost: 1.60, stock: 999, unit: 'unidad', sku: 'BEB-005', active: true },
+  { id: 'p19', name: 'Papaya con Leche', category: 'Bebidas', price: 5.50, cost: 2.10, stock: 999, unit: 'unidad', sku: 'BEB-006', active: true },
+  // ---- Bebidas calientes ----
+  { id: 'p20', name: 'Café', category: 'Bebidas calientes', price: 3.00, cost: 0.90, stock: 999, unit: 'unidad', sku: 'BCA-001', active: true },
+  { id: 'p21', name: 'Café con Leche', category: 'Bebidas calientes', price: 5.00, cost: 1.80, stock: 999, unit: 'unidad', sku: 'BCA-002', active: true },
+  { id: 'p22', name: 'Avena', category: 'Bebidas calientes', price: 3.00, cost: 1.00, stock: 999, unit: 'unidad', sku: 'BCA-003', active: true },
+  { id: 'p23', name: 'Quinua', category: 'Bebidas calientes', price: 3.00, cost: 1.00, stock: 999, unit: 'unidad', sku: 'BCA-004', active: true },
+  { id: 'p24', name: 'Infusiones', category: 'Bebidas calientes', price: 3.00, cost: 0.80, stock: 999, unit: 'unidad', sku: 'BCA-005', active: true },
+  { id: 'p25', name: 'Chocolate Caliente', category: 'Bebidas calientes', price: 5.00, cost: 1.90, stock: 999, unit: 'unidad', sku: 'BCA-006', active: true },
+  // ---- Postres y pasteles ----
+  { id: 'p26', name: 'Muffins variados', category: 'Postres y pasteles', price: 2.50, cost: 1.00, stock: 15, unit: 'unidad', sku: 'PST-001', active: true },
+  { id: 'p27', name: 'Definidora', category: 'Postres y pasteles', price: 3.50, cost: 1.40, stock: 15, unit: 'unidad', sku: 'PST-002', active: true },
+  { id: 'p28', name: 'Pionono relleno con manjar', category: 'Postres y pasteles', price: 5.00, cost: 2.00, stock: 15, unit: 'unidad', sku: 'PST-003', active: true },
+  { id: 'p29', name: 'Milhoja', category: 'Postres y pasteles', price: 6.00, cost: 2.40, stock: 15, unit: 'unidad', sku: 'PST-004', active: true },
+  { id: 'p30', name: 'Torta de chocolate', category: 'Postres y pasteles', price: 6.00, cost: 2.40, stock: 15, unit: 'unidad', sku: 'PST-005', active: true },
+  { id: 'p31', name: 'Torta de zanahoria', category: 'Postres y pasteles', price: 8.00, cost: 3.20, stock: 15, unit: 'unidad', sku: 'PST-006', active: true },
+  { id: 'p32', name: 'Brownie', category: 'Postres y pasteles', price: 5.00, cost: 2.00, stock: 15, unit: 'unidad', sku: 'PST-007', active: true },
+  { id: 'p33', name: 'Tajada de queque', category: 'Postres y pasteles', price: 2.50, cost: 1.00, stock: 15, unit: 'unidad', sku: 'PST-008', active: true },
+  { id: 'p34', name: 'Budin', category: 'Postres y pasteles', price: 2.50, cost: 1.00, stock: 15, unit: 'unidad', sku: 'PST-009', active: true },
+  { id: 'p35', name: 'Pudin', category: 'Postres y pasteles', price: 3.00, cost: 1.20, stock: 15, unit: 'unidad', sku: 'PST-010', active: true },
+  { id: 'p36', name: 'Leche asada', category: 'Postres y pasteles', price: 5.00, cost: 2.00, stock: 15, unit: 'unidad', sku: 'PST-011', active: true },
+  { id: 'p37', name: 'Flan', category: 'Postres y pasteles', price: 4.00, cost: 1.60, stock: 15, unit: 'unidad', sku: 'PST-012', active: true },
+  { id: 'p38', name: 'Gelatina', category: 'Postres y pasteles', price: 3.00, cost: 1.00, stock: 15, unit: 'unidad', sku: 'PST-013', active: true },
+  { id: 'p39', name: 'Alfajor de la casa', category: 'Postres y pasteles', price: 3.00, cost: 1.20, stock: 15, unit: 'unidad', sku: 'PST-014', active: true },
+  { id: 'p40', name: 'Galletas con chispas o lentejas', category: 'Postres y pasteles', price: 4.00, cost: 1.60, stock: 15, unit: 'unidad', sku: 'PST-015', active: true },
 ];
 
 const DEFAULT_BUSINESS = {
@@ -1415,7 +1457,7 @@ function DeleteSaleModal({ sale, onConfirm, onClose, deleting }) {
 // ============================================================
 // PESTAÑA: CONFIGURACIONES (contraseña + categorías)
 // ============================================================
-function ConfiguracionesTab({ currentPassword, onChangePassword, categories, onAddCategory, onDeleteCategory, products, showToast, cashReceivedRequired, onToggleCashRequired }) {
+function ConfiguracionesTab({ currentPassword, onChangePassword, categories, onAddCategory, onDeleteCategory, products, showToast, cashReceivedRequired, onToggleCashRequired, onReplaceCatalog, replacingCatalog }) {
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
@@ -1540,6 +1582,27 @@ function ConfiguracionesTab({ currentPassword, onChangePassword, categories, onA
           />
           <button onClick={addCategory} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ backgroundColor: C.accent }}>Agregar</button>
         </div>
+      </div>
+
+      <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.red}` }}>
+        <div className="flex items-center gap-1.5 text-sm font-bold mb-1" style={{ color: C.red }}>
+          <AlertTriangle size={15} /> Reemplazar catálogo completo
+        </div>
+        <div className="text-xs mb-3" style={{ color: C.textSoft }}>
+          Borra TODOS los productos y categorías actuales y los reemplaza por la carta de D'DIAZ (Sándwiches, Bebidas, Bebidas calientes, Postres y pasteles). Úsalo solo si quieres empezar de cero con tu carta real. No afecta tus ventas ya registradas.
+        </div>
+        <button
+          onClick={() => {
+            if (window.confirm('Esto va a BORRAR todos tus productos y categorías actuales y los va a reemplazar por la carta de D\'DIAZ. Esta acción no se puede deshacer. ¿Continuar?')) {
+              onReplaceCatalog();
+            }
+          }}
+          disabled={replacingCatalog}
+          className="px-4 py-2 rounded-lg text-sm font-bold text-white disabled:opacity-50"
+          style={{ backgroundColor: C.red }}
+        >
+          {replacingCatalog ? 'Reemplazando...' : 'Reemplazar catálogo con la carta de D\'DIAZ'}
+        </button>
       </div>
     </div>
   );
@@ -1787,6 +1850,19 @@ export default function App() {
     }
   };
 
+  const [replacingCatalog, setReplacingCatalog] = useState(false);
+  const handleReplaceCatalog = async () => {
+    setReplacingCatalog(true);
+    try {
+      await replaceCatalog({ categories: DEFAULT_CATEGORIES, products: SEED_PRODUCTS });
+      showToast('Catálogo reemplazado con la carta de D\'DIAZ.');
+    } catch (e) {
+      showToast('No se pudo reemplazar el catálogo.', 'error');
+    } finally {
+      setReplacingCatalog(false);
+    }
+  };
+
   // ---------- Historial: eliminar venta (para ventas de prueba/simuladas) ----------
   const handleDeleteSale = async (sale, restoreStock) => {
     setDeletingSale(true);
@@ -1878,7 +1954,7 @@ export default function App() {
       {/* Ticket invisible en pantalla (fuera del viewport), pero visible SOLO
           al imprimir gracias a las reglas @media print de más abajo. Así se
           imprime automáticamente sin mostrar ningún modal ni diálogo propio. */}
-      <div style={{ position: 'fixed', top: 0, left: 0, width: 0, height: 0, overflow: 'hidden' }} aria-hidden="true">
+      <div className="hidden print:block" aria-hidden="true">
         <Ticket sale={printingSale} business={business} />
       </div>
 
@@ -1969,6 +2045,8 @@ export default function App() {
                 showToast={showToast}
                 cashReceivedRequired={posSettings.cashReceivedRequired}
                 onToggleCashRequired={handleToggleCashRequired}
+                onReplaceCatalog={handleReplaceCatalog}
+                replacingCatalog={replacingCatalog}
               />
             : <MetricsLock onUnlock={() => setPrivateUnlocked(true)} correctPassword={securityConfig.password} />
         )}
