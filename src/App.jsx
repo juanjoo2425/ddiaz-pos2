@@ -214,11 +214,8 @@ function Ticket({ sale, business }) {
   return (
     <div
       id="print-ticket"
+      className="ticket-container"
       style={{
-        // Rollo térmico de 58mm: el área imprimible real ronda los 48-50mm
-        // (el rollo mide 58mm pero los mecanismos de casi todas las
-        // impresoras de este tipo, incluida la Xprinter de la foto, no
-        // imprimen hasta el borde físico).
         width: '50mm',
         margin: '0 auto',
         fontFamily: "Arial, Helvetica, sans-serif",
@@ -1500,108 +1497,108 @@ function ConfiguracionesTab({ currentPassword, onChangePassword, categories, onA
         <div className="flex items-center gap-1.5 text-sm font-bold mb-1" style={{ color: C.text }}>
           <Lock size={15} style={{ color: C.accent }} /> Cambiar contraseña de acceso
         </div>
-        <div className="text-xs mb-3" style={{ color: C.textSoft }}>
-          Esta es la contraseña que protege Métricas, Historial y esta sección de Configuraciones.
-        </div>
-        <div className="space-y-2">
-          <input type="password" placeholder="Contraseña actual" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}` }} />
-          <input type="password" placeholder="Nueva contraseña" value={newPw} onChange={(e) => setNewPw(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}` }} />
-          <input type="password" placeholder="Confirmar nueva contraseña" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}` }} />
+        <p className="text-xs mb-3" style={{ color: C.textSoft }}>
+          Protege el acceso a la pestaña Métricas. Al cambiarla aquí, se actualiza en vivo para todos los dispositivos.
+        </p>
+        <div className="space-y-2 max-w-sm">
+          <div>
+            <label className="text-xs font-medium" style={{ color: C.textSoft }}>Contraseña actual</label>
+            <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)}
+              className="w-full mt-1 px-3 py-1.5 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}` }} />
+          </div>
+          <div>
+            <label className="text-xs font-medium" style={{ color: C.textSoft }}>Nueva contraseña</label>
+            <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)}
+              className="w-full mt-1 px-3 py-1.5 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}` }} />
+          </div>
+          <div>
+            <label className="text-xs font-medium" style={{ color: C.textSoft }}>Confirmar nueva contraseña</label>
+            <input type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)}
+              className="w-full mt-1 px-3 py-1.5 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}` }} />
+          </div>
           {pwError && <div className="text-xs" style={{ color: C.red }}>{pwError}</div>}
-          <button onClick={submitPasswordChange} disabled={savingPw}
-            className="w-full py-2 rounded-lg text-sm font-bold text-white disabled:opacity-50" style={{ backgroundColor: C.accent }}>
-            {savingPw ? 'Guardando...' : 'Actualizar contraseña'}
+          <button
+            onClick={submitPasswordChange}
+            disabled={savingPw}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50 mt-1"
+            style={{ backgroundColor: C.accent }}
+          >
+            {savingPw ? 'Guardando...' : 'Cambiar contraseña'}
           </button>
         </div>
       </div>
 
       <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
         <div className="flex items-center gap-1.5 text-sm font-bold mb-1" style={{ color: C.text }}>
-          <DollarSign size={15} style={{ color: C.accent }} /> Monto recibido en efectivo
+          <Layers size={15} style={{ color: C.accent }} /> Categorías de productos
         </div>
-        <div className="text-xs mb-3" style={{ color: C.textSoft }}>
-          Decide si al cobrar en efectivo es obligatorio escribir cuánto te dio el cliente (para que calcule el vuelto solo) o si prefieres poder saltarte ese paso.
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => onToggleCashRequired(false)}
-            className="flex-1 py-2 rounded-lg text-sm font-medium"
-            style={{
-              backgroundColor: !cashReceivedRequired ? C.accent : C.surfaceAlt,
-              color: !cashReceivedRequired ? '#fff' : C.textSoft,
-            }}
-          >
-            Opcional
-          </button>
-          <button
-            onClick={() => onToggleCashRequired(true)}
-            className="flex-1 py-2 rounded-lg text-sm font-medium"
-            style={{
-              backgroundColor: cashReceivedRequired ? C.accent : C.surfaceAlt,
-              color: cashReceivedRequired ? '#fff' : C.textSoft,
-            }}
-          >
-            Obligatorio
-          </button>
-        </div>
-        <div className="text-xs mt-2" style={{ color: C.textFaint }}>
-          {cashReceivedRequired
-            ? 'Ahora mismo: no se puede cobrar en efectivo sin ingresar el monto recibido.'
-            : 'Ahora mismo: se puede cobrar en efectivo sin ingresar el monto recibido (el vuelto solo se calcula si lo escribes).'}
-        </div>
-      </div>
-
-      <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-        <div className="flex items-center gap-1.5 text-sm font-bold mb-1" style={{ color: C.text }}>
-          <Package size={15} style={{ color: C.accent }} /> Categorías de productos
-        </div>
-        <div className="text-xs mb-3" style={{ color: C.textSoft }}>
-          Estas son las categorías que aparecen al vender y al crear productos.
-        </div>
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {categories.map((c) => (
-            <span key={c} className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg text-xs font-medium" style={{ backgroundColor: C.accentSoft, color: C.accent }}>
-              {c}
-              <button onClick={() => removeCategory(c)} className="w-4 h-4 flex items-center justify-center rounded-full" style={{ backgroundColor: 'rgba(0,0,0,0.08)' }}>
-                <X size={10} />
-              </button>
-            </span>
-          ))}
-          {categories.length === 0 && <div className="text-xs" style={{ color: C.textFaint }}>Aún no hay categorías.</div>}
-        </div>
-        <div className="flex gap-2">
+        <p className="text-xs mb-3" style={{ color: C.textSoft }}>
+          Organizan los productos en la pantalla de venta. Agrega las categorías reales de tu panadería/pastelería.
+        </p>
+        <div className="flex gap-2 max-w-sm mb-3">
           <input
             value={newCategory}
             onChange={(e) => setNewCategory(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addCategory()}
-            placeholder="Nueva categoría (ej. Tortas por encargo)"
-            className="flex-1 px-3 py-2 rounded-lg text-sm outline-none" style={{ border: `1px solid ${C.border}` }}
+            placeholder="Nueva categoría..."
+            className="flex-1 px-3 py-1.5 rounded-lg text-sm outline-none"
+            style={{ border: `1px solid ${C.border}` }}
           />
-          <button onClick={addCategory} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ backgroundColor: C.accent }}>Agregar</button>
+          <button onClick={addCategory} className="px-3 py-1.5 rounded-lg text-sm font-medium text-white" style={{ backgroundColor: C.accent }}>
+            Agregar
+          </button>
+        </div>
+        <div className="space-y-1.5 max-w-sm">
+          {categories.map((c) => (
+            <div key={c} className="flex items-center justify-between py-1.5 px-3 rounded-lg" style={{ backgroundColor: C.surfaceAlt }}>
+              <span className="text-sm font-medium" style={{ color: C.text }}>{c}</span>
+              <button onClick={() => removeCategory(c)}><Trash2 size={14} style={{ color: C.red }} /></button>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.red}` }}>
-        <div className="flex items-center gap-1.5 text-sm font-bold mb-1" style={{ color: C.red }}>
-          <AlertTriangle size={15} /> Reemplazar catálogo completo
+      <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+        <div className="flex items-center gap-1.5 text-sm font-bold mb-1" style={{ color: C.text }}>
+          <Settings size={15} style={{ color: C.accent }} /> Reglas de caja
         </div>
-        <div className="text-xs mb-3" style={{ color: C.textSoft }}>
-          Borra TODOS los productos y categorías actuales y los reemplaza por la carta de D'DIAZ (Sándwiches, Bebidas, Bebidas calientes, Postres y pasteles). Úsalo solo si quieres empezar de cero con tu carta real. No afecta tus ventas ya registradas.
+        <p className="text-xs mb-3" style={{ color: C.textSoft }}>
+          Ajusta cómo funciona el cobro según la forma de trabajo de tu negocio.
+        </p>
+        <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={cashReceivedRequired}
+            onChange={(e) => onToggleCashRequired(e.target.checked)}
+            className="mt-0.5"
+          />
+          <div>
+            <div className="font-medium" style={{ color: C.text }}>Exigir el monto recibido en pago con efectivo</div>
+            <div className="text-xs" style={{ color: C.textSoft }}>
+              Si está activado, el botón de cobro no se puede presionar hasta haber ingresado cuánto paga el cliente (para calcular el vuelto obligatoriamente).
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div className="rounded-xl p-4" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
+        <div className="flex items-center gap-1.5 text-sm font-bold mb-1" style={{ color: C.text }}>
+          <Package size={15} style={{ color: C.accent }} /> Catálogo inicial (Carta D'DIAZ)
         </div>
+        <p className="text-xs mb-3" style={{ color: C.textSoft }}>
+          Si iniciaste con productos de ejemplo y quieres reemplazarlos por la carta real de D'DIAZ (Sándwiches, Bebidas, Bebidas calientes y Postres), usa esta opción. Se reemplazarán todos los productos y categorías actuales.
+        </p>
         <button
           onClick={() => {
-            if (window.confirm('Esto va a BORRAR todos tus productos y categorías actuales y los va a reemplazar por la carta de D\'DIAZ. Esta acción no se puede deshacer. ¿Continuar?')) {
+            if (window.confirm('¿Reemplazar todo el catálogo actual por la carta real de D\'DIAZ? Esta acción borra los productos actuales pero NO afecta el historial de ventas.')) {
               onReplaceCatalog();
             }
           }}
           disabled={replacingCatalog}
-          className="px-4 py-2 rounded-lg text-sm font-bold text-white disabled:opacity-50"
-          style={{ backgroundColor: C.red }}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+          style={{ backgroundColor: C.honey }}
         >
-          {replacingCatalog ? 'Reemplazando...' : 'Reemplazar catálogo con la carta de D\'DIAZ'}
+          {replacingCatalog ? 'Cargando carta real...' : 'Cargar carta real de D\'DIAZ'}
         </button>
       </div>
     </div>
@@ -1609,25 +1606,37 @@ function ConfiguracionesTab({ currentPassword, onChangePassword, categories, onA
 }
 
 // ============================================================
-// APP PRINCIPAL
+// COMPONENTE PRINCIPAL (APP)
 // ============================================================
 export default function App() {
-  const [ready, setReady] = useState(false);
-  const [offline, setOffline] = useState(false);
+  const [activeTab, setActiveTab] = useState('pos');
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
   const [business, setBusiness] = useState(DEFAULT_BUSINESS);
-  const [sellersList, setSellersList] = useState([]);
-  const [currentSeller, setCurrentSeller] = useState(null);
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
-  const [securityConfig, setSecurityConfig] = useState({ password: DEFAULT_PASSWORD });
-  const [posSettings, setPosSettings] = useState({ cashReceivedRequired: false });
+  const [sellers, setSellers] = useState([]);
 
-  const [activeTab, setActiveTab] = useState('pos');
-  const [privateUnlocked, setPrivateUnlocked] = useState(false);
+  // Seguridad / Contraseña
+  const [securityData, setSecurityData] = useState(null);
+  const [metricsUnlocked, setMetricsUnlocked] = useState(false);
+
+  // Categorías
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+
+  // Ajustes de POS
+  const [posSettings, setPosSettings] = useState({ cashReceivedRequired: true });
+
+  // Dispositivo / Vendedor
+  const [currentSeller, setCurrentSeller] = useState(() => localStorage.getItem('pos_seller') || '');
+  const [showSellerModal, setShowSellerModal] = useState(false);
+
+  // Modales
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // Estado del POS (Vender)
   const [cart, setCart] = useState([]);
-  const [search, setSearch] = useState('');
-  const [invSearch, setInvSearch] = useState('');
+  const [posSearch, setPosSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
   const [docType, setDocType] = useState('Boleta');
   const [customerName, setCustomerName] = useState('');
@@ -1636,421 +1645,373 @@ export default function App() {
   const [cashReceived, setCashReceived] = useState('');
   const [checkingOut, setCheckingOut] = useState(false);
 
-  const [productModal, setProductModal] = useState(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [printingSale, setPrintingSale] = useState(null);
-  const [deleteSaleModal, setDeleteSaleModal] = useState(null);
+  // Búsqueda en Inventario
+  const [invSearch, setInvSearch] = useState('');
+
+  // Ticket para imprimir
+  const [printSale, setPrintSale] = useState(null);
+
+  // Eliminar venta
+  const [saleToDelete, setSaleToDelete] = useState(null);
   const [deletingSale, setDeletingSale] = useState(false);
+
+  // Reemplazar catálogo
+  const [replacingCatalog, setReplacingCatalog] = useState(false);
+
+  // Toast notification
   const [toast, setToast] = useState(null);
-  const [lastSync, setLastSync] = useState(Date.now());
-
-  const seededRef = useRef(false);
-  const categoriesSeededRef = useRef(false);
-  const printTimeoutRef = useRef(null);
-  const toastRef = useRef(null);
-  const showToast = useCallback((msg, type = 'ok') => {
+  const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type });
-    if (toastRef.current) clearTimeout(toastRef.current);
-    toastRef.current = setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
-  // ---------- Imprimir automáticamente apenas hay una venta para imprimir ----------
-  // (sin mostrar ningún modal ni pedir confirmación — ver nota sobre el
-  // diálogo del navegador en el mensaje de Claude, requiere modo kiosco).
+  // Realtime subscriptions a Firestore
   useEffect(() => {
-    if (printingSale) {
-      if (printTimeoutRef.current) clearTimeout(printTimeoutRef.current);
-      printTimeoutRef.current = setTimeout(() => { window.print(); }, 150);
-    }
-    return () => { if (printTimeoutRef.current) clearTimeout(printTimeoutRef.current); };
-  }, [printingSale]);
-
-  // ---------- Vendedor de este dispositivo (localStorage real) ----------
-  useEffect(() => {
-    const saved = localStorage.getItem('ddiaz-current-seller');
-    if (saved) setCurrentSeller(saved);
-  }, []);
-
-  const handleSelectSeller = async (name) => {
-    setCurrentSeller(name);
-    localStorage.setItem('ddiaz-current-seller', name);
-    try {
-      await fbAddSeller(name, sellersList);
-    } catch (e) {
-      // no bloquear el flujo si falla, es un detalle menor
-    }
-  };
-
-  // ---------- Suscripciones en tiempo real a Firestore ----------
-  useEffect(() => {
-    let productsLoaded = false;
-    let salesLoaded = false;
-
-    const unsubProducts = subscribeProducts(async (items) => {
-      if (!seededRef.current && items.length === 0) {
-        seededRef.current = true;
-        try {
-          await seedProductsIfEmpty(SEED_PRODUCTS);
-        } catch (e) {
-          showToast('No se pudo conectar con la base de datos. Revisa tu configuración de Firebase.', 'error');
-          setOffline(true);
-        }
-        return; // el propio seed disparará este mismo listener de nuevo
-      }
+    const unsubProducts = subscribeProducts((items) => {
       setProducts(items);
-      setLastSync(Date.now());
-      setOffline(false);
-      if (!productsLoaded) { productsLoaded = true; checkReady(); }
-    });
-
-    const unsubSales = subscribeSales((items) => {
-      setSales(items);
-      setLastSync(Date.now());
-      if (!salesLoaded) { salesLoaded = true; checkReady(); }
-    });
-
-    const unsubBusiness = subscribeBusiness((b) => setBusiness(b || DEFAULT_BUSINESS), DEFAULT_BUSINESS);
-    const unsubSellers = subscribeSellers((list) => setSellersList(list || []));
-    const unsubSecurity = subscribeSecurity((s) => setSecurityConfig(s && s.password ? s : { password: DEFAULT_PASSWORD }), { password: DEFAULT_PASSWORD });
-    const unsubPosSettings = subscribePosSettings((s) => setPosSettings(s || { cashReceivedRequired: false }), { cashReceivedRequired: false });
-    const unsubCategories = subscribeCategories(async (names) => {
-      if (names === null) {
-        if (!categoriesSeededRef.current) {
-          categoriesSeededRef.current = true;
-          try { await seedCategoriesIfEmpty(DEFAULT_CATEGORIES); } catch (e) { /* no bloquea el resto de la app */ }
-        }
-        return; // el propio seed disparará este listener de nuevo
+      if (items.length === 0) {
+        // Carga automática inicial de productos de D'DIAZ si la colección está vacía
+        seedProductsIfEmpty(SEED_PRODUCTS);
       }
-      setCategories(names);
     });
 
-    function checkReady() {
-      if (productsLoaded && salesLoaded) setReady(true);
-    }
+    const unsubSales = subscribeSales((items) => setSales(items));
 
-    // Si en 8 segundos no hay respuesta de Firestore, probablemente
-    // falta configurar las variables de entorno de Firebase.
-    const timeout = setTimeout(() => {
-      if (!productsLoaded || !salesLoaded) {
-        setOffline(true);
-        setReady(true);
+    const unsubBusiness = subscribeBusiness((data) => setBusiness(data), DEFAULT_BUSINESS);
+
+    const unsubSellers = subscribeSellers((list) => setSellers(list));
+
+    const unsubSecurity = subscribeSecurity((sec) => setSecurityData(sec), { password: DEFAULT_PASSWORD });
+
+    const unsubCategories = subscribeCategories((cats) => {
+      if (cats === null) {
+        seedCategoriesIfEmpty(DEFAULT_CATEGORIES);
+        setCategories(DEFAULT_CATEGORIES);
+      } else {
+        setCategories(cats);
       }
-    }, 8000);
+    });
+
+    const unsubPosSettings = subscribePosSettings((s) => setPosSettings(s), { cashReceivedRequired: true });
 
     return () => {
-      unsubProducts(); unsubSales(); unsubBusiness(); unsubSellers(); unsubSecurity(); unsubCategories(); unsubPosSettings();
-      clearTimeout(timeout);
+      unsubProducts();
+      unsubSales();
+      unsubBusiness();
+      unsubSellers();
+      unsubSecurity();
+      unsubCategories();
+      unsubPosSettings();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- Checkout (transacción atómica en Firestore) ----------
+  // Si no hay vendedor configurado en este dispositivo, mostrar modal al inicio
+  useEffect(() => {
+    if (!currentSeller) setShowSellerModal(true);
+  }, [currentSeller]);
+
+  const selectSeller = async (name) => {
+    localStorage.setItem('pos_seller', name);
+    setCurrentSeller(name);
+    setShowSellerModal(false);
+    await fbAddSeller(name, sellers);
+  };
+
+  // Handlers
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     setCheckingOut(true);
     try {
       const totals = computeCartTotals(cart);
-      const cashNum = cashReceived.trim() !== '' ? (parseFloat(cashReceived) || 0) : null;
-
       const sale = await checkoutSale({
         cart,
-        seller: currentSeller,
+        seller: currentSeller || 'Caja',
         docType,
-        customerName: customerName.trim(),
-        customerDoc: customerDoc.trim(),
+        customerName,
+        customerDoc,
         paymentMethod,
-        cashReceived: paymentMethod === 'Efectivo' ? cashNum : null,
+        cashReceived: cashReceived.trim() !== '' ? parseFloat(cashReceived) : null,
         totals,
       });
 
+      setPrintSale(sale);
+
+      setTimeout(() => {
+        window.print();
+      }, 300);
+
+      // Limpiar formulario POS
       setCart([]);
       setCustomerName('');
       setCustomerDoc('');
       setCashReceived('');
-      setPrintingSale(sale);
-      showToast('Venta registrada — imprimiendo ticket...');
-    } catch (e) {
-      showToast(e.message || 'No se pudo registrar la venta. Intenta de nuevo.', 'error');
+      showToast(`Venta ${sale.docNumber} registrada con éxito.`);
+    } catch (err) {
+      showToast(err.message || 'Error al procesar la venta.', 'error');
     } finally {
       setCheckingOut(false);
     }
   };
 
-  // ---------- Productos ----------
-  const handleSaveProduct = async (product) => {
-    const isNew = !products.some((p) => p.id === product.id);
+  const handleReprint = (sale) => {
+    setPrintSale(sale);
+    setTimeout(() => window.print(), 300);
+  };
+
+  const handleSaveProduct = async (p) => {
     try {
-      await fbSaveProduct(product);
-      setProductModal(null);
-      showToast(isNew ? 'Producto agregado.' : 'Producto actualizado.');
-    } catch (e) {
-      showToast('No se pudo guardar el producto.', 'error');
+      await fbSaveProduct(p);
+      setShowProductModal(false);
+      setEditingProduct(null);
+      showToast('Producto guardado.');
+    } catch (err) {
+      showToast('Error al guardar producto.', 'error');
     }
   };
 
-  const handleDeleteProduct = async (product) => {
-    try {
-      await deleteProductDoc(product.id);
-      showToast('Producto eliminado.');
-    } catch (e) {
-      showToast('No se pudo eliminar el producto.', 'error');
+  const handleDeleteProduct = async (p) => {
+    if (window.confirm(`¿Eliminar "${p.name}" del inventario?`)) {
+      try {
+        await deleteProductDoc(p.id);
+        showToast('Producto eliminado.');
+      } catch (err) {
+        showToast('Error al eliminar.', 'error');
+      }
     }
   };
 
-  const handleSaveBusiness = async (form) => {
+  const handleSaveBusiness = async (info) => {
     try {
-      await fbSaveBusiness(form);
-      setBusiness(form);
-      setSettingsOpen(false);
+      await fbSaveBusiness(info);
+      setShowSettingsModal(false);
       showToast('Datos del negocio actualizados.');
-    } catch (e) {
-      showToast('No se pudo guardar la configuración.', 'error');
+    } catch (err) {
+      showToast('Error al guardar.', 'error');
     }
   };
 
-  // ---------- Configuraciones: contraseña y categorías ----------
-  const handleChangePassword = async (newPw) => {
+  const handleChangePassword = async (newPassword) => {
     try {
-      await saveSecurity({ password: newPw });
+      await saveSecurity({ password: newPassword });
       showToast('Contraseña actualizada correctamente.');
-    } catch (e) {
-      showToast('No se pudo actualizar la contraseña.', 'error');
+    } catch (err) {
+      showToast('Error al cambiar la contraseña.', 'error');
     }
   };
 
-  const handleAddCategory = async (name) => {
-    const next = [...categories, name];
-    setCategories(next);
-    try {
-      await saveCategories(next);
-      showToast('Categoría agregada.');
-    } catch (e) {
-      showToast('No se pudo guardar la categoría.', 'error');
-    }
+  const handleAddCategory = async (catName) => {
+    const updated = [...categories, catName];
+    setCategories(updated);
+    await saveCategories(updated);
+    showToast(`Categoría "${catName}" agregada.`);
   };
 
-  const handleDeleteCategory = async (name) => {
-    const next = categories.filter((c) => c !== name);
-    setCategories(next);
-    try {
-      await saveCategories(next);
-      showToast('Categoría eliminada.');
-    } catch (e) {
-      showToast('No se pudo eliminar la categoría.', 'error');
-    }
+  const handleDeleteCategory = async (catName) => {
+    const updated = categories.filter((c) => c !== catName);
+    setCategories(updated);
+    await saveCategories(updated);
+    showToast(`Categoría "${catName}" eliminada.`);
   };
 
-  const handleToggleCashRequired = async (required) => {
-    setPosSettings((prev) => ({ ...prev, cashReceivedRequired: required }));
-    try {
-      await savePosSettings({ cashReceivedRequired: required });
-      showToast(required ? 'El monto recibido ahora es obligatorio.' : 'El monto recibido ahora es opcional.');
-    } catch (e) {
-      showToast('No se pudo guardar el ajuste.', 'error');
-    }
+  const handleToggleCashRequired = async (value) => {
+    await savePosSettings({ cashReceivedRequired: value });
+    showToast('Ajuste de caja guardado.');
   };
 
-  const [replacingCatalog, setReplacingCatalog] = useState(false);
-  const handleReplaceCatalog = async () => {
-    setReplacingCatalog(true);
-    try {
-      await replaceCatalog({ categories: DEFAULT_CATEGORIES, products: SEED_PRODUCTS });
-      showToast('Catálogo reemplazado con la carta de D\'DIAZ.');
-    } catch (e) {
-      showToast('No se pudo reemplazar el catálogo.', 'error');
-    } finally {
-      setReplacingCatalog(false);
-    }
-  };
-
-  // ---------- Historial: eliminar venta (para ventas de prueba/simuladas) ----------
-  const handleDeleteSale = async (sale, restoreStock) => {
+  const handleConfirmDeleteSale = async (sale, restoreStock) => {
     setDeletingSale(true);
     try {
       await fbDeleteSale({ saleId: sale.id, items: sale.items, restoreStock });
-      setDeleteSaleModal(null);
-      showToast('Venta eliminada' + (restoreStock ? ' y stock restaurado.' : '.'));
-    } catch (e) {
-      showToast('No se pudo eliminar la venta.', 'error');
+      setSaleToDelete(null);
+      showToast(`Venta ${sale.docNumber} eliminada.`);
+    } catch (err) {
+      showToast('Error al eliminar la venta.', 'error');
     } finally {
       setDeletingSale(false);
     }
   };
 
+  const handleReplaceCatalog = async () => {
+    setReplacingCatalog(true);
+    try {
+      await replaceCatalog({ categories: DEFAULT_CATEGORIES, products: SEED_PRODUCTS });
+      showToast('Catálogo reemplazado por la carta real de D\'DIAZ.');
+    } catch (err) {
+      showToast('Error al reemplazar catálogo.', 'error');
+    } finally {
+      setReplacingCatalog(false);
+    }
+  };
 
-  if (!ready) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <RefreshCw size={20} className="animate-spin" style={{ color: C.accent }} />
-      </div>
-    );
-  }
-
-  const secondsAgo = Math.round((Date.now() - lastSync) / 1000);
+  const activePassword = securityData ? securityData.password : DEFAULT_PASSWORD;
 
   return (
-    <div style={{ backgroundColor: C.bg, minHeight: '100vh' }} className="p-4">
+    <div className="min-h-screen flex flex-col font-sans" style={{ backgroundColor: C.bg, color: C.text }}>
+      {/* Contenedor del Ticket para Impresión CSS Directa */}
       <style>{`
         @media print {
-          /* Le decimos al navegador el tamaño REAL del rollo térmico
-             (58mm de ancho) y que el alto sea automático según el
-             contenido — así no imprime una hoja tipo carta con la
-             comanda perdida en una esquina y todo lo demás en blanco. */
-          @page {
-            size: 58mm auto;
-            margin: 0;
+          body * {
+            visibility: hidden;
           }
-          html, body {
-            margin: 0 !important;
-            padding: 0 !important;
+          #print-ticket, #print-ticket * {
+            visibility: visible;
           }
-          body * { visibility: hidden; }
-          #print-ticket, #print-ticket * { visibility: visible; }
           #print-ticket {
             position: absolute;
             left: 0;
             top: 0;
-            width: 50mm;
-            margin: 0;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          @page {
+            size: auto;
+            margin: 0mm;
           }
         }
       `}</style>
 
-      {offline && (
-        <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium print:hidden" style={{ backgroundColor: C.redSoft, color: C.red }}>
-          <WifiOff size={14} />
-          No se pudo conectar con la base de datos. Revisa las variables de Firebase en tu despliegue (ver README.md).
-        </div>
-      )}
-
-      {!currentSeller && <SellerModal sellers={sellersList} onSelect={handleSelectSeller} />}
-
-      {productModal && (
-        <ProductModal
-          product={productModal.product}
-          onSave={handleSaveProduct}
-          onClose={() => setProductModal(null)}
-          categories={categories}
-        />
-      )}
-      {settingsOpen && (
-        <SettingsModal
-          business={business}
-          currentSeller={currentSeller}
-          onSave={handleSaveBusiness}
-          onClose={() => setSettingsOpen(false)}
-          onChangeSeller={() => { localStorage.removeItem('ddiaz-current-seller'); setCurrentSeller(null); setSettingsOpen(false); }}
-        />
-      )}
-      {deleteSaleModal && (
-        <DeleteSaleModal
-          sale={deleteSaleModal}
-          onConfirm={handleDeleteSale}
-          onClose={() => setDeleteSaleModal(null)}
-          deleting={deletingSale}
-        />
-      )}
-
-      {/* Ticket invisible en pantalla (fuera del viewport), pero visible SOLO
-          al imprimir gracias a las reglas @media print de más abajo. Así se
-          imprime automáticamente sin mostrar ningún modal ni diálogo propio. */}
-      <div className="hidden print:block" aria-hidden="true">
-        <Ticket sale={printingSale} business={business} />
-      </div>
-
-      <Toast toast={toast} />
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 print:hidden">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: C.accent }}>
-            <Store size={20} color="#fff" />
+      {/* Cabecera de la App */}
+      <header className="px-4 py-3 flex items-center justify-between border-b print:hidden" style={{ backgroundColor: C.surface, borderColor: C.border }}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-lg text-white" style={{ backgroundColor: C.accent }}>
+            D
           </div>
           <div>
-            <div className="font-bold text-base leading-tight" style={{ color: C.text }}>{business.name}</div>
-            <div className="text-xs" style={{ color: C.textFaint }}>{business.slogan}</div>
+            <h1 className="font-extrabold text-base leading-tight" style={{ color: C.text }}>{business.name}</h1>
+            <p className="text-xs" style={{ color: C.textFaint }}>{business.slogan}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-3">
           <NavTabs active={activeTab} onChange={setActiveTab} />
-          <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: C.surfaceAlt, color: C.textFaint }} title="Datos en vivo, sincronizados entre todos los dispositivos">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: offline ? C.red : C.green }} />
-            {offline ? 'Sin conexión' : 'En vivo'}
-          </div>
-          {(activeTab === 'metricas' || activeTab === 'historial' || activeTab === 'config') && privateUnlocked && (
-            <button
-              onClick={() => setPrivateUnlocked(false)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium"
-              style={{ border: `1px solid ${C.border}`, color: C.textSoft }}
-              title="Bloquear de nuevo"
-            >
-              <LockOpen size={13} /> Bloquear
-            </button>
-          )}
-          {currentSeller && (
-            <button onClick={() => setSettingsOpen(true)} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium" style={{ border: `1px solid ${C.border}`, color: C.textSoft }}>
-              <User size={13} /> {currentSeller}
-              <Settings size={13} />
-            </button>
-          )}
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="p-2 rounded-lg text-xs font-medium flex items-center gap-1.5 print:hidden"
+            style={{ backgroundColor: C.surfaceAlt, color: C.textSoft }}
+            title="Ajustes del negocio"
+          >
+            <Settings size={16} />
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* Contenido */}
-      <div className="print:hidden">
+      {/* Contenido Principal */}
+      <main className="flex-1 p-4 max-w-7xl w-full mx-auto print:hidden">
         {activeTab === 'pos' && (
           <PosTab
-            products={products} cart={cart} setCart={setCart}
-            search={search} setSearch={setSearch}
-            categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
-            docType={docType} setDocType={setDocType}
-            customerName={customerName} setCustomerName={setCustomerName}
-            customerDoc={customerDoc} setCustomerDoc={setCustomerDoc}
-            paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod}
-            cashReceived={cashReceived} setCashReceived={setCashReceived}
-            onCheckout={handleCheckout} checkingOut={checkingOut}
+            products={products}
+            cart={cart}
+            setCart={setCart}
+            search={posSearch}
+            setSearch={setPosSearch}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            docType={docType}
+            setDocType={setDocType}
+            customerName={customerName}
+            setCustomerName={setCustomerName}
+            customerDoc={customerDoc}
+            setCustomerDoc={setCustomerDoc}
+            paymentMethod={paymentMethod}
+            setPaymentMethod={setPaymentMethod}
+            cashReceived={cashReceived}
+            setCashReceived={setCashReceived}
+            onCheckout={handleCheckout}
+            checkingOut={checkingOut}
             categories={categories}
             cashReceivedRequired={posSettings.cashReceivedRequired}
           />
         )}
+
         {activeTab === 'inventario' && (
           <InventarioTab
             products={products}
-            onAdd={() => setProductModal({ product: null })}
-            onEdit={(p) => setProductModal({ product: p })}
+            onAdd={() => { setEditingProduct(null); setShowProductModal(true); }}
+            onEdit={(p) => { setEditingProduct(p); setShowProductModal(true); }}
             onDelete={handleDeleteProduct}
-            search={invSearch} setSearch={setInvSearch}
+            search={invSearch}
+            setSearch={setInvSearch}
           />
         )}
+
         {activeTab === 'metricas' && (
-          privateUnlocked
-            ? <MetricasTab sales={sales} products={products} />
-            : <MetricsLock onUnlock={() => setPrivateUnlocked(true)} correctPassword={securityConfig.password} />
+          metricsUnlocked ? (
+            <MetricasTab sales={sales} products={products} />
+          ) : (
+            <MetricsLock
+              correctPassword={activePassword}
+              onUnlock={() => setMetricsUnlocked(true)}
+            />
+          )
         )}
+
         {activeTab === 'historial' && (
-          privateUnlocked
-            ? <HistorialTab sales={sales} onReprint={(s) => setPrintingSale(s)} onDelete={(s) => setDeleteSaleModal(s)} />
-            : <MetricsLock onUnlock={() => setPrivateUnlocked(true)} correctPassword={securityConfig.password} />
+          <HistorialTab
+            sales={sales}
+            onReprint={handleReprint}
+            onDelete={(s) => setSaleToDelete(s)}
+          />
         )}
+
         {activeTab === 'config' && (
-          privateUnlocked
-            ? <ConfiguracionesTab
-                currentPassword={securityConfig.password}
-                onChangePassword={handleChangePassword}
-                categories={categories}
-                onAddCategory={handleAddCategory}
-                onDeleteCategory={handleDeleteCategory}
-                products={products}
-                showToast={showToast}
-                cashReceivedRequired={posSettings.cashReceivedRequired}
-                onToggleCashRequired={handleToggleCashRequired}
-                onReplaceCatalog={handleReplaceCatalog}
-                replacingCatalog={replacingCatalog}
-              />
-            : <MetricsLock onUnlock={() => setPrivateUnlocked(true)} correctPassword={securityConfig.password} />
+          <ConfiguracionesTab
+            currentPassword={activePassword}
+            onChangePassword={handleChangePassword}
+            categories={categories}
+            onAddCategory={handleAddCategory}
+            onDeleteCategory={handleDeleteCategory}
+            products={products}
+            showToast={showToast}
+            cashReceivedRequired={posSettings.cashReceivedRequired}
+            onToggleCashRequired={handleToggleCashRequired}
+            onReplaceCatalog={handleReplaceCatalog}
+            replacingCatalog={replacingCatalog}
+          />
         )}
-      </div>
+      </main>
+
+      {/* Componente Oculto de Ticket para Impresión en Papel */}
+      {printSale && <Ticket sale={printSale} business={business} />}
+
+      {/* Modales */}
+      {showSellerModal && (
+        <SellerModal
+          sellers={sellers}
+          onSelect={selectSeller}
+        />
+      )}
+
+      {showProductModal && (
+        <ProductModal
+          product={editingProduct}
+          onSave={handleSaveProduct}
+          onClose={() => { setShowProductModal(false); setEditingProduct(null); }}
+          categories={categories}
+        />
+      )}
+
+      {showSettingsModal && (
+        <SettingsModal
+          business={business}
+          onSave={handleSaveBusiness}
+          onClose={() => setShowSettingsModal(false)}
+          currentSeller={currentSeller}
+          onChangeSeller={() => { setShowSettingsModal(false); setShowSellerModal(true); }}
+        />
+      )}
+
+      {saleToDelete && (
+        <DeleteSaleModal
+          sale={saleToDelete}
+          onConfirm={handleConfirmDeleteSale}
+          onClose={() => setSaleToDelete(null)}
+          deleting={deletingSale}
+        />
+      )}
+
+      {/* Notificación Toast */}
+      <Toast toast={toast} />
     </div>
   );
 }
