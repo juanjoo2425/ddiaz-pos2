@@ -1,6 +1,7 @@
 import {
   collection, doc, onSnapshot, query, orderBy, limit,
   setDoc, deleteDoc, runTransaction, serverTimestamp, Timestamp,
+  getDocs, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -208,4 +209,25 @@ export async function deleteSale({ saleId, items, restoreStock }) {
 
     tx.delete(saleRef);
   });
+}
+
+/**
+ * Reemplaza TODO el catálogo de productos y la lista de categorías de una
+ * sola vez (borra lo que había y pone la lista nueva). Se usa desde
+ * Configuraciones para cargar una carta completa sin tener que borrar
+ * producto por producto. No toca las ventas ya registradas.
+ */
+export async function replaceCatalog({ categories, products }) {
+  const batch = writeBatch(db);
+
+  const existingSnap = await getDocs(collection(db, 'products'));
+  existingSnap.forEach((d) => batch.delete(d.ref));
+
+  batch.set(doc(db, 'config', 'categories'), { names: categories });
+
+  products.forEach((p) => {
+    batch.set(doc(db, 'products', p.id), p);
+  });
+
+  await batch.commit();
 }
