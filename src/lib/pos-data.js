@@ -231,3 +231,109 @@ export async function replaceCatalog({ categories, products }) {
 
   await batch.commit();
 }
+
+// ============================================================
+// CAJA — turnos (shifts) y arqueo ciego
+//
+// Colecciones nuevas:
+//  - shifts/{shiftId}            → un documento por turno (apertura/cierre)
+//  - shift_movements/{moveId}    → egresos/ingresos extra durante el turno
+//
+// El "cuadre" (comparar lo declarado por el cajero contra lo que el
+// sistema esperaba) NUNCA se guarda en el turno ni se calcula hasta que
+// un admin abre el reporte — así el cierre es realmente ciego: el cajero
+// jamás ve, ni en el código, cuánto debería haber.
+// ============================================================
+
+export function subscribeActiveShift(onChange) {
+  const q = query(collection(db, 'shifts'), orderBy('openedAt', 'desc'), limit(1));
+  return onSnapshot(q, (snap) => {
+    if (snap.empty) { onChange(null); return; }
+    const d = snap.docs[0];
+    const data = d.data();
+    const shift = {
+      id: d.id,
+      ...data,
+      openedAt: data.openedAt instanceof Timestamp ? data.openedAt.toDate().toISOString() : data.openedAt,
+      closedAt: data.closedAt instanceof Timestamp ? data.closedAt.toDate().toISOString() : data.closedAt,
+    };
+    onChange(shift.status === 'open' ? shift : null);
+  }, (err) => console.error('subscribeActiveShift error', err));
+}
+
+export async function openShift({ openedBy, openingFloat }) {
+  const ref = doc(collection(db, 'shifts'));
+  await setDoc(ref, {
+    status: 'open',
+    openedAt: serverTimestamp(),
+    openedBy,
+    openingFloat,
+    closedAt: null,
+    closedBy: null,
+    declaredCash: null,
+    declaredBillsBreakdown: null,
+    declaredCoinsBreakdown: null,
+    declaredCardVouchers: null,
+    declaredNotes: '',
+  });
+  return ref.id;
+}
+
+// Se traen los movimientos recientes sin filtrar por shiftId en la
+// consulta (para no depender de un índice compuesto en Firestore) y se
+// filtra en el cliente — el volumen por turno es bajo, así que es seguro.
+export function subscribeShiftMovements(shiftId, onChange, max = 200) {
+  const q = query(collection(db, 'shift_movements'), orderBy('date', 'desc'), limit(max));
+  return onSnapshot(q, (snap) => {
+    const all = snap.docs.map((d) => {
+      const data = d.data();
+      return { id: d.id, ...data, date: data.date instanceof Timestamp ? data.date.toDate().toISOString() : data.date };
+    });
+    onChange(shiftId ? all.filter((m) => m.shiftId === shiftId) : all);
+  }, (err) => console.error('subscribeShiftMovements error', err));
+}
+
+export async function addShiftMovement({ shiftId, type, amount, reason, seller }) {
+  const ref = doc(collection(db, 'shift_movements'));
+  await setDoc(ref, { shiftId, type, amount, reason: reason || '', seller, date: serverTimestamp() });
+}
+
+/**
+ * Cierre CIEGO del turno: guarda exactamente lo que el cajero declaró
+ * (efectivo contado, desglose de billetes/monedas, vouchers de tarjeta),
+ * sin calcular ni mostrar en ningún momento cuánto "debería" haber.
+ */
+export async function closeShiftBlind({ shiftId, closedBy, declaredCash, billsBreakdown, coinsBreakdown, declaredCardVouchers, declaredNotes }) {
+  await setDoc(doc(db, 'shifts', shiftId), {
+    status: 'closed',
+    closedAt: serverTimestamp(),
+    closedBy,
+    declaredCash,
+    declaredBillsBreakdown: billsBreakdown,
+    declaredCoinsBreakdown: coinsBreakdown,
+    declaredCardVouchers,
+    declaredNotes: declaredNotes || '',
+  }, { merge: true });
+}
+
+// Lista de turnos cerrados para el reporte de auditoría (solo Admin).
+// Se ordena solo por closedAt (sin "where status==closed") para evitar
+// depender de un índice compuesto; se filtra en el cliente.
+export function subscribeClosedShifts(onChange, max = 60) {
+  const q = query(collection(db, 'shifts'), orderBy('closedAt', 'desc'), limit(max));
+  return onSnapshot(q, (snap) => {
+    const items = snap.docs
+      .map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          openedAt: data.openedAt instanceof Timestamp ? data.openedAt.toDate().toISOString() : data.openedAt,
+          closedAt: data.closedAt instanceof Timestamp ? data.closedAt.toDate().toISOString() : data.closedAt,
+        };
+      })
+      .filter((s) => s.status === 'closed');
+    onChange(items);
+  }, (err) => console.error('subscribeClosedShifts error', err));
+}
+
