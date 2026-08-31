@@ -3,7 +3,8 @@ import {
   ShoppingCart, Plus, Minus, Trash2, Printer, Search, TrendingUp, Package,
   Receipt, BarChart3, X, Settings, AlertTriangle, RefreshCw, User, Check,
   DollarSign, Store, Edit2, PlusCircle, Lock, LockOpen, WifiOff,
-  Clock, Users, Calendar, Percent, Layers, Award, TrendingDown, ShoppingBasket, Repeat
+  Clock, Users, Calendar, Percent, Layers, Award, TrendingDown, ShoppingBasket, Repeat,
+  Vault,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -15,44 +16,22 @@ import {
   addSeller as fbAddSeller, seedProductsIfEmpty, checkoutSale,
   subscribeSecurity, saveSecurity, subscribeCategories, seedCategoriesIfEmpty, saveCategories,
   deleteSale as fbDeleteSale, subscribePosSettings, savePosSettings, replaceCatalog,
+  subscribeActiveShift, openShift, subscribeShiftMovements, addShiftMovement,
+  closeShiftBlind, subscribeClosedShifts,
 } from './lib/pos-data';
+import {
+  C, IGV_RATE, LOW_STOCK_THRESHOLD, genId, money, roundQty, isFractionable,
+  fmtDate, fmtTime, isSameDay, daysAgo, pctChange, median, DOW_LABELS,
+  computeCartTotals, BILL_DENOMINATIONS, COIN_DENOMINATIONS,
+} from './lib/shared';
+import CashRegister from './components/CashRegister';
 
-
-// ============================================================
-// PALETA DE MARCA — D'DIAZ (panadería)
-// Evitamos el típico crema+terracota genérico: aquí usamos un
-// marrón "corteza horneada" profundo + un ámbar "miel" como acento,
-// sobre un fondo cálido tipo harina, distinto del cliché #D97757.
-// ============================================================
-const C = {
-  bg: '#FBF8F3',            // fondo general (harina)
-  surface: '#FFFFFF',
-  surfaceAlt: '#F3EEE3',
-  border: '#E4DCC9',
-  borderStrong: '#D3C7AA',
-  text: '#2E2418',           // marrón espresso
-  textSoft: '#7A6C58',
-  textFaint: '#A79A85',
-  accent: '#8C3A2B',         // ladrillo horneado (acento primario)
-  accentDark: '#6E2C20',
-  accentSoft: '#F3E1DA',
-  honey: '#C9862B',          // ámbar miel (acento secundario / dinero)
-  honeySoft: '#FBEDD6',
-  green: '#3F6B4C',
-  greenSoft: '#E4EFE6',
-  red: '#B23B2E',
-  redSoft: '#FBE7E3',
-  chart: ['#8C3A2B', '#C9862B', '#3F6B4C', '#6E5A9E', '#3E7C8C', '#B25B8C'],
-};
-
-const IGV_RATE = 0.18;
-const LOW_STOCK_THRESHOLD = 5;
 // Contraseña por defecto SOLO para la primera vez que se usa la app (antes
 // de que exista el documento de seguridad en Firestore). Después de eso, la
 // contraseña real vive en la base de datos y se cambia desde Configuraciones.
 const DEFAULT_PASSWORD = 'clea25';
 
-const DEFAULT_CATEGORIES = ['Sándwiches', 'Bebidas', 'Bebidas calientes', 'Postres y pasteles'];
+const DEFAULT_CATEGORIES = ['Panadería', 'Sándwiches', 'Bebidas', 'Bebidas calientes', 'Postres y pasteles'];
 const METODOS_PAGO = ['Efectivo', 'Yape / Plin', 'Tarjeta'];
 const TIPOS_DOC = ['Boleta', 'Factura', 'Nota de venta'];
 
@@ -67,6 +46,10 @@ const TIPOS_DOC = ['Boleta', 'Factura', 'Nota de venta'];
 // preparados al momento, no se acaban); los postres/pasteles en 15 porque
 // normalmente se hornean en tandas limitadas. Ajusta a lo que corresponda.
 const SEED_PRODUCTS = [
+  // ---- Panadería (pan suelto, único rubro con cantidades fraccionadas: 0.5, 1.5, etc.) ----
+  { id: 'p0a', name: 'Pan francés (unidad)', category: 'Panadería', price: 0.40, cost: 0.18, stock: 200, unit: 'unidad', sku: 'PAN-001', active: true },
+  { id: 'p0b', name: 'Pan de yema (unidad)', category: 'Panadería', price: 1.00, cost: 0.45, stock: 100, unit: 'unidad', sku: 'PAN-002', active: true },
+  { id: 'p0c', name: 'Baguette artesanal', category: 'Panadería', price: 6.50, cost: 2.80, stock: 25, unit: 'unidad', sku: 'PAN-003', active: true },
   // ---- Sándwiches ----
   { id: 'p1', name: 'Hamburguesa royal', category: 'Sándwiches', price: 6.00, cost: 2.70, stock: 999, unit: 'unidad', sku: 'SAN-001', active: true },
   { id: 'p2', name: 'Croissant (jamón y queso)', category: 'Sándwiches', price: 6.00, cost: 2.70, stock: 999, unit: 'unidad', sku: 'SAN-002', active: true },
@@ -122,63 +105,8 @@ const DEFAULT_BUSINESS = {
 };
 
 // ============================================================
-// UTILIDADES
+// Numeración de documentos (específico de ventas, se queda acá)
 // ============================================================
-const genId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-
-const money = (n) => {
-  const v = Number.isFinite(n) ? n : 0;
-  return `S/ ${v.toFixed(2)}`;
-};
-
-// Redondea a 2 decimales para evitar arrastrar errores de coma
-// flotante (ej. 1.5 - 0.5 = 0.9999999998) al sumar/restar cantidades.
-const roundQty = (n) => Math.round(n * 100) / 100;
-
-// Solo la categoría "Panadería" admite cantidades fraccionadas (1.5, 2.5...).
-const isFractionable = (category) => category === 'Panadería';
-
-const fmtDate = (iso) => {
-  const d = new Date(iso);
-  return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-};
-const fmtTime = (iso) => {
-  const d = new Date(iso);
-  return d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-};
-const isSameDay = (iso, ref) => {
-  const a = new Date(iso), b = ref;
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-};
-const daysAgo = (n) => {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
-
-// Utilidades para KPIs
-const pctChange = (current, previous) => {
-  if (previous === 0) return current > 0 ? 100 : 0;
-  return ((current - previous) / previous) * 100;
-};
-
-const median = (arr) => {
-  if (arr.length === 0) return 0;
-  const sorted = [...arr].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-};
-
-const DOW_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-
-function computeCartTotals(cart) {
-  const total = cart.reduce((s, it) => s + it.price * it.qty, 0);
-  const subtotalSinIgv = total / (1 + IGV_RATE);
-  const igv = total - subtotalSinIgv;
-  return { total, subtotalSinIgv, igv };
-}
-
 function docPrefix(docType) {
   if (docType === 'Boleta') return 'B001';
   if (docType === 'Factura') return 'F001';
@@ -214,7 +142,6 @@ function Ticket({ sale, business }) {
   return (
     <div
       id="print-ticket"
-      className="ticket-container"
       style={{
         // Rollo térmico de 58mm: el área imprimible real ronda los 48-50mm
         // (el rollo mide 58mm pero los mecanismos de casi todas las
@@ -262,6 +189,7 @@ function Ticket({ sale, business }) {
 function NavTabs({ active, onChange }) {
   const tabs = [
     { id: 'pos', label: 'Vender', icon: ShoppingCart },
+    { id: 'caja', label: 'Caja', icon: Vault },
     { id: 'inventario', label: 'Inventario', icon: Package },
     { id: 'metricas', label: 'Métricas', icon: BarChart3 },
     { id: 'historial', label: 'Historial', icon: Receipt },
@@ -1623,6 +1551,9 @@ export default function App() {
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [securityConfig, setSecurityConfig] = useState({ password: DEFAULT_PASSWORD });
   const [posSettings, setPosSettings] = useState({ cashReceivedRequired: false });
+  const [activeShift, setActiveShift] = useState(null);
+  const [shiftMovements, setShiftMovements] = useState([]);
+  const [closedShifts, setClosedShifts] = useState([]);
 
   const [activeTab, setActiveTab] = useState('pos');
   const [privateUnlocked, setPrivateUnlocked] = useState(false);
@@ -1714,6 +1645,9 @@ export default function App() {
     const unsubSellers = subscribeSellers((list) => setSellersList(list || []));
     const unsubSecurity = subscribeSecurity((s) => setSecurityConfig(s && s.password ? s : { password: DEFAULT_PASSWORD }), { password: DEFAULT_PASSWORD });
     const unsubPosSettings = subscribePosSettings((s) => setPosSettings(s || { cashReceivedRequired: false }), { cashReceivedRequired: false });
+    const unsubActiveShift = subscribeActiveShift((shift) => setActiveShift(shift));
+    const unsubShiftMovements = subscribeShiftMovements(null, (list) => setShiftMovements(list || []));
+    const unsubClosedShifts = subscribeClosedShifts((list) => setClosedShifts(list || []));
     const unsubCategories = subscribeCategories(async (names) => {
       if (names === null) {
         if (!categoriesSeededRef.current) {
@@ -1740,6 +1674,7 @@ export default function App() {
 
     return () => {
       unsubProducts(); unsubSales(); unsubBusiness(); unsubSellers(); unsubSecurity(); unsubCategories(); unsubPosSettings();
+      unsubActiveShift(); unsubShiftMovements(); unsubClosedShifts();
       clearTimeout(timeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1748,6 +1683,7 @@ export default function App() {
   // ---------- Checkout (transacción atómica en Firestore) ----------
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+    if (!activeShift) { showToast('La caja está cerrada. Ábrela antes de vender.', 'error'); return; }
     setCheckingOut(true);
     try {
       const totals = computeCartTotals(cart);
@@ -1864,6 +1800,36 @@ export default function App() {
     }
   };
 
+  // ---------- Caja: apertura, movimientos, cierre ciego ----------
+  const handleOpenShift = async (openingFloat) => {
+    try {
+      await openShift({ openedBy: currentSeller, openingFloat });
+      showToast('Caja abierta correctamente.');
+    } catch (e) {
+      showToast('No se pudo abrir la caja.', 'error');
+    }
+  };
+
+  const handleAddMovement = async ({ type, amount, reason }) => {
+    if (!activeShift) return;
+    try {
+      await addShiftMovement({ shiftId: activeShift.id, type, amount, reason, seller: currentSeller });
+      showToast(type === 'egreso' ? 'Egreso registrado.' : 'Ingreso registrado.');
+    } catch (e) {
+      showToast('No se pudo registrar el movimiento.', 'error');
+    }
+  };
+
+  const handleCloseShift = async ({ declaredCash, billsBreakdown, coinsBreakdown, declaredCardVouchers, declaredNotes }) => {
+    if (!activeShift) return;
+    try {
+      await closeShiftBlind({ shiftId: activeShift.id, closedBy: currentSeller, declaredCash, billsBreakdown, coinsBreakdown, declaredCardVouchers, declaredNotes });
+      showToast('Caja cerrada. El reporte queda disponible solo para el administrador.');
+    } catch (e) {
+      showToast('No se pudo cerrar la caja.', 'error');
+    }
+  };
+
   // ---------- Historial: eliminar venta (para ventas de prueba/simuladas) ----------
   const handleDeleteSale = async (sale, restoreStock) => {
     setDeletingSale(true);
@@ -1952,10 +1918,13 @@ export default function App() {
         />
       )}
 
-      {/* Componente de Ticket para impresión.
-          Se renderiza solo cuando existe una venta pendiente de impresión;
-          las reglas @media print controlan qué se muestra al imprimir. */}
-      {printingSale && <Ticket sale={printingSale} business={business} />}
+      {/* Ticket invisible en pantalla (fuera del viewport), pero visible SOLO
+          al imprimir gracias a las reglas @media print de más abajo. Así se
+          imprime automáticamente sin mostrar ningún modal ni diálogo propio,
+          y sin quedarse pegado visible en la pantalla como pasaba antes. */}
+      <div className="hidden print:block" aria-hidden="true">
+        <Ticket sale={printingSale} business={business} />
+      </div>
 
       <Toast toast={toast} />
 
@@ -1977,7 +1946,7 @@ export default function App() {
             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: offline ? C.red : C.green }} />
             {offline ? 'Sin conexión' : 'En vivo'}
           </div>
-          {(activeTab === 'metricas' || activeTab === 'historial' || activeTab === 'config') && privateUnlocked && (
+          {(activeTab === 'metricas' || activeTab === 'historial' || activeTab === 'config' || activeTab === 'caja') && privateUnlocked && (
             <button
               onClick={() => setPrivateUnlocked(false)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium"
@@ -1999,18 +1968,48 @@ export default function App() {
       {/* Contenido */}
       <div className="print:hidden">
         {activeTab === 'pos' && (
-          <PosTab
-            products={products} cart={cart} setCart={setCart}
-            search={search} setSearch={setSearch}
-            categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
-            docType={docType} setDocType={setDocType}
-            customerName={customerName} setCustomerName={setCustomerName}
-            customerDoc={customerDoc} setCustomerDoc={setCustomerDoc}
-            paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod}
-            cashReceived={cashReceived} setCashReceived={setCashReceived}
-            onCheckout={handleCheckout} checkingOut={checkingOut}
-            categories={categories}
-            cashReceivedRequired={posSettings.cashReceivedRequired}
+          activeShift ? (
+            <PosTab
+              products={products} cart={cart} setCart={setCart}
+              search={search} setSearch={setSearch}
+              categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter}
+              docType={docType} setDocType={setDocType}
+              customerName={customerName} setCustomerName={setCustomerName}
+              customerDoc={customerDoc} setCustomerDoc={setCustomerDoc}
+              paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod}
+              cashReceived={cashReceived} setCashReceived={setCashReceived}
+              onCheckout={handleCheckout} checkingOut={checkingOut}
+              categories={categories}
+              cashReceivedRequired={posSettings.cashReceivedRequired}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <Vault size={36} style={{ color: C.textFaint }} />
+              <div className="text-sm font-bold" style={{ color: C.text }}>La caja está cerrada</div>
+              <div className="text-xs max-w-xs" style={{ color: C.textSoft }}>Abre la caja con el fondo inicial antes de empezar a vender.</div>
+              <button
+                onClick={() => setActiveTab('caja')}
+                className="px-4 py-2 rounded-lg text-sm font-bold text-white"
+                style={{ backgroundColor: C.accent }}
+              >
+                Ir a Caja
+              </button>
+            </div>
+          )
+        )}
+        {activeTab === 'caja' && (
+          <CashRegister
+            activeShift={activeShift}
+            movements={shiftMovements}
+            closedShifts={closedShifts}
+            sales={sales}
+            currentSeller={currentSeller}
+            onOpenShift={handleOpenShift}
+            onAddMovement={handleAddMovement}
+            onCloseShift={handleCloseShift}
+            privateUnlocked={privateUnlocked}
+            correctPassword={securityConfig.password}
+            onUnlockPrivate={() => setPrivateUnlocked(true)}
           />
         )}
         {activeTab === 'inventario' && (
