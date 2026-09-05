@@ -143,12 +143,11 @@ function Ticket({ sale, business }) {
     <div
       id="print-ticket"
       style={{
-        // Rollo térmico de 58mm: el área imprimible real ronda los 48-50mm
-        // (el rollo mide 58mm pero los mecanismos de casi todas las
-        // impresoras de este tipo, incluida la Xprinter de la foto, no
-        // imprimen hasta el borde físico).
+        // Rollo térmico de 58mm. Dejamos 50mm para el área imprimible.
         width: '50mm',
-        margin: '0 auto',
+        maxWidth: '50mm',
+        boxSizing: 'border-box',
+        margin: 0,
         fontFamily: "Arial, Helvetica, sans-serif",
         color: '#000',
         padding: '2mm 1mm',
@@ -1856,29 +1855,83 @@ export default function App() {
   const secondsAgo = Math.round((Date.now() - lastSync) / 1000);
 
   return (
-    <div style={{ backgroundColor: C.bg, minHeight: '100vh' }} className="p-4">
+    <div style={{ backgroundColor: C.bg }} className="p-4">
       <style>{`
         @media print {
-          /* Le decimos al navegador el tamaño REAL del rollo térmico
-             (58mm de ancho) y que el alto sea automático según el
-             contenido — así no imprime una hoja tipo carta con la
-             comanda perdida en una esquina y todo lo demás en blanco. */
+          /* ======================================================
+             IMPRESIÓN TÉRMICA 58mm
+             Importante: no usamos position:absolute ni visibility
+             para sacar el ticket del flujo. Eso era parte del
+             problema que dejaba una zona blanca enorme.
+             ====================================================== */
           @page {
             size: 58mm auto;
             margin: 0;
           }
-          html, body {
+
+          html,
+          body {
+            width: 58mm !important;
+            min-width: 58mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            background: #fff !important;
+          }
+
+          #root {
+            width: 58mm !important;
+            min-width: 58mm !important;
+            height: auto !important;
+            min-height: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
           }
-          body * { visibility: hidden; }
-          #print-ticket, #print-ticket * { visibility: visible; }
+
+          #root > div {
+            width: 58mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          /* Todo lo que no sea el ticket deja de ocupar espacio. */
+          #root > div > *:not(#print-container) {
+            display: none !important;
+          }
+
+          #print-container {
+            display: block !important;
+            width: 58mm !important;
+            max-width: 58mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
+
           #print-ticket {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 50mm;
-            margin: 0;
+            display: block !important;
+            position: static !important;
+            left: auto !important;
+            top: auto !important;
+            width: 50mm !important;
+            max-width: 50mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 2mm 1mm !important;
+            box-sizing: border-box !important;
+            overflow: visible !important;
+          }
+
+          #print-ticket,
+          #print-ticket * {
+            visibility: visible !important;
           }
         }
       `}</style>
@@ -1922,7 +1975,11 @@ export default function App() {
           al imprimir gracias a las reglas @media print de más abajo. Así se
           imprime automáticamente sin mostrar ningún modal ni diálogo propio,
           y sin quedarse pegado visible en la pantalla como pasaba antes. */}
-      <div className="hidden print:block" aria-hidden="true">
+      <div
+        id="print-container"
+        className="hidden print:block"
+        aria-hidden="true"
+      >
         <Ticket sale={printingSale} business={business} />
       </div>
 
